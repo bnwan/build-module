@@ -1,4 +1,4 @@
-# buildModule
+# build-module
 script to build and bundle browserify modules
 
 # How to use
