@@ -1,5 +1,5 @@
 {
-  "name": "buildModule",
+  "name": "build-module",
   "version": "1.0.0",
   "description": "script to build a browserify module",
   "main": "build-module.js",
