@@ -5,16 +5,28 @@ var b = require('browserify')();
 var fs = require('fs');
 
 var api = {
-	bundle: function(options){
+	bundle: function (options) {
+		if (!options) {
+			options = {};
+		}
+
 		b.add(options.root);
+
+		if (Array.isArray(options.transforms)) {
+			options.transforms.each(function (transform) {
+				b.transform(transform);
+			});
+		}
+
 		b.bundle(function (err, code) {
-		    fs.writeFileSync(options.name + '.bundle.js', code);
+			fs.writeFileSync(options.name + '.bundle.js', code);
 		});
 	}
 };
 
+
 module.exports = {
-	bundle: function(options){
+	bundle: function (options) {
 		api.bundle(options);
 	}
 };
@@ -222,9 +234,37 @@ Browserify.prototype.external = function (file, opts) {
     if (file && typeof file === 'object' && typeof file.bundle === 'function') {
         var b = file;
         self._pending ++;
+
+        var bdeps = {};
+        var blabels = {};
+
         b.on('label', function (prev, id) {
             self._external.push(id);
+
+            if (prev !== id) {
+                blabels[prev] = id;
+                self._external.push(prev);
+            }
         });
+
+        b.pipeline.get('deps').push(through.obj(function (row, enc, next) {
+            bdeps = xtend(bdeps, row.deps);
+            this.push(row);
+            next();
+        }));
+
+        self.on('dep', function (row) {
+            Object.keys(row.deps).forEach(function (key) {
+                var prev = bdeps[key];
+                if (prev) {
+                    var id = blabels[prev];
+                    if (id) {
+                        row.indexDeps[key] = id;
+                    }
+                }
+            });
+        });
+
         b.pipeline.get('label').once('end', function () {
             if (-- self._pending === 0) self.emit('_ready');
         });
@@ -711,7 +751,8 @@ Browserify.prototype._debug = function (opts) {
     return through.obj(function (row, enc, next) {
         if (opts.debug) {
             row.sourceRoot = 'file://localhost';
-            row.sourceFile = path.relative(basedir, row.file);
+            row.sourceFile = path.relative(basedir, row.file)
+                .replace(/\\/g, '/');
         }
         this.push(row);
         next();
@@ -779,7 +820,7 @@ function isExternalModule (file) {
 }
 
 }).call(this,require('_process'),"/node_modules\\browserify")
-},{"./lib/builtins.js":4,"_process":125,"browser-pack":8,"browser-resolve":26,"concat-stream":38,"defined":47,"deps-sort":48,"duplexer2":50,"events":58,"inherits":59,"insert-module-globals":60,"isarray":80,"labeled-stream-splicer":81,"module-deps":92,"path":124,"resolve":137,"shallow-copy":144,"syntax-error":159,"through2":168,"xtend":191}],3:[function(require,module,exports){
+},{"./lib/builtins.js":4,"_process":160,"browser-pack":8,"browser-resolve":39,"concat-stream":51,"defined":60,"deps-sort":61,"duplexer2":63,"events":71,"inherits":72,"insert-module-globals":73,"isarray":106,"labeled-stream-splicer":107,"module-deps":118,"path":159,"resolve":172,"shallow-copy":179,"syntax-error":194,"through2":203,"xtend":226}],3:[function(require,module,exports){
 
 },{}],4:[function(require,module,exports){
 exports.assert = require.resolve('assert/');
@@ -1017,7 +1058,7 @@ if(!module.parent && process.title !== 'browser') {
 }
 
 }).call(this,require('_process'),require("buffer").Buffer)
-},{"_process":125,"buffer":34,"jsonparse":6,"through":7}],6:[function(require,module,exports){
+},{"_process":160,"buffer":47,"jsonparse":6,"through":7}],6:[function(require,module,exports){
 (function (Buffer){
 /*global Buffer*/
 // Named constants with unique integer values
@@ -1422,7 +1463,7 @@ proto.onToken = function (token, value) {
 module.exports = Parser;
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":34}],7:[function(require,module,exports){
+},{"buffer":47}],7:[function(require,module,exports){
 (function (process){
 var Stream = require('stream')
 
@@ -1534,7 +1575,7 @@ function through (write, end, opts) {
 
 
 }).call(this,require('_process'))
-},{"_process":125,"stream":157}],8:[function(require,module,exports){
+},{"_process":160,"stream":192}],8:[function(require,module,exports){
 (function (process,Buffer,__dirname){
 var JSONStream = require('JSONStream');
 var defined = require('defined');
@@ -1658,7 +1699,7 @@ module.exports = function (opts) {
 };
 
 }).call(this,require('_process'),require("buffer").Buffer,"/node_modules\\browserify\\node_modules\\browser-pack")
-},{"JSONStream":5,"_process":125,"buffer":34,"combine-source-map":9,"defined":47,"fs":3,"path":124,"through2":24,"umd":169}],9:[function(require,module,exports){
+},{"JSONStream":5,"_process":160,"buffer":47,"combine-source-map":9,"defined":60,"fs":3,"path":159,"through2":37,"umd":204}],9:[function(require,module,exports){
 'use strict';
 
 var convert         =  require('convert-source-map');
@@ -1790,7 +1831,7 @@ module.exports = function (map) {
   return mappings;
 }
 
-},{"source-map":13}],11:[function(require,module,exports){
+},{"source-map":26}],11:[function(require,module,exports){
 (function (Buffer){
 'use strict';
 var fs = require('fs');
@@ -1933,7 +1974,7 @@ exports.__defineGetter__('mapFileCommentRegex', function () {
 });
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":34,"fs":3,"path":124}],12:[function(require,module,exports){
+},{"buffer":47,"fs":3,"path":159}],12:[function(require,module,exports){
 (function (Buffer){
 'use strict';
 var SourceMapGenerator = require('source-map').SourceMapGenerator;
@@ -2053,7 +2094,7 @@ Generator.prototype.toString = function () {
 };
 
 Generator.prototype._mappings = function () {
-  return this.generator._mappings;
+  return this.generator._mappings._array;
 };
 
 Generator.prototype.gen = function () {
@@ -2064,7 +2105,7 @@ module.exports = function (opts) { return new Generator(opts); };
 module.exports.Generator = Generator;
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":34,"source-map":13}],13:[function(require,module,exports){
+},{"buffer":47,"source-map":13}],13:[function(require,module,exports){
 /*
  * Copyright 2009-2011 Mozilla Foundation and contributors
  * Licensed under the New BSD license. See LICENSE.txt or:
@@ -2074,7 +2115,7 @@ exports.SourceMapGenerator = require('./source-map/source-map-generator').Source
 exports.SourceMapConsumer = require('./source-map/source-map-consumer').SourceMapConsumer;
 exports.SourceNode = require('./source-map/source-node').SourceNode;
 
-},{"./source-map/source-map-consumer":19,"./source-map/source-map-generator":20,"./source-map/source-node":21}],14:[function(require,module,exports){
+},{"./source-map/source-map-consumer":21,"./source-map/source-map-generator":22,"./source-map/source-node":23}],14:[function(require,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -2173,7 +2214,7 @@ define(function (require, exports, module) {
 
 });
 
-},{"./util":22,"amdefine":23}],15:[function(require,module,exports){
+},{"./util":24,"amdefine":25}],15:[function(require,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -2317,7 +2358,7 @@ define(function (require, exports, module) {
 
 });
 
-},{"./base64":16,"amdefine":23}],16:[function(require,module,exports){
+},{"./base64":16,"amdefine":25}],16:[function(require,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -2361,7 +2402,7 @@ define(function (require, exports, module) {
 
 });
 
-},{"amdefine":23}],17:[function(require,module,exports){
+},{"amdefine":25}],17:[function(require,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -2373,6 +2414,427 @@ if (typeof define !== 'function') {
 }
 define(function (require, exports, module) {
 
+  var util = require('./util');
+  var binarySearch = require('./binary-search');
+  var ArraySet = require('./array-set').ArraySet;
+  var base64VLQ = require('./base64-vlq');
+  var SourceMapConsumer = require('./source-map-consumer').SourceMapConsumer;
+
+  /**
+   * A BasicSourceMapConsumer instance represents a parsed source map which we can
+   * query for information about the original file positions by giving it a file
+   * position in the generated source.
+   *
+   * The only parameter is the raw source map (either as a JSON string, or
+   * already parsed to an object). According to the spec, source maps have the
+   * following attributes:
+   *
+   *   - version: Which version of the source map spec this map is following.
+   *   - sources: An array of URLs to the original source files.
+   *   - names: An array of identifiers which can be referrenced by individual mappings.
+   *   - sourceRoot: Optional. The URL root from which all sources are relative.
+   *   - sourcesContent: Optional. An array of contents of the original source files.
+   *   - mappings: A string of base64 VLQs which contain the actual mappings.
+   *   - file: Optional. The generated file this source map is associated with.
+   *
+   * Here is an example source map, taken from the source map spec[0]:
+   *
+   *     {
+   *       version : 3,
+   *       file: "out.js",
+   *       sourceRoot : "",
+   *       sources: ["foo.js", "bar.js"],
+   *       names: ["src", "maps", "are", "fun"],
+   *       mappings: "AA,AB;;ABCDE;"
+   *     }
+   *
+   * [0]: https://docs.google.com/document/d/1U1RGAehQwRypUTovF1KRlpiOFze0b-_2gc6fAH0KY0k/edit?pli=1#
+   */
+  function BasicSourceMapConsumer(aSourceMap) {
+    var sourceMap = aSourceMap;
+    if (typeof aSourceMap === 'string') {
+      sourceMap = JSON.parse(aSourceMap.replace(/^\)\]\}'/, ''));
+    }
+
+    var version = util.getArg(sourceMap, 'version');
+    var sources = util.getArg(sourceMap, 'sources');
+    // Sass 3.3 leaves out the 'names' array, so we deviate from the spec (which
+    // requires the array) to play nice here.
+    var names = util.getArg(sourceMap, 'names', []);
+    var sourceRoot = util.getArg(sourceMap, 'sourceRoot', null);
+    var sourcesContent = util.getArg(sourceMap, 'sourcesContent', null);
+    var mappings = util.getArg(sourceMap, 'mappings');
+    var file = util.getArg(sourceMap, 'file', null);
+
+    // Once again, Sass deviates from the spec and supplies the version as a
+    // string rather than a number, so we use loose equality checking here.
+    if (version != this._version) {
+      throw new Error('Unsupported version: ' + version);
+    }
+
+    // Some source maps produce relative source paths like "./foo.js" instead of
+    // "foo.js".  Normalize these first so that future comparisons will succeed.
+    // See bugzil.la/1090768.
+    sources = sources.map(util.normalize);
+
+    // Pass `true` below to allow duplicate names and sources. While source maps
+    // are intended to be compressed and deduplicated, the TypeScript compiler
+    // sometimes generates source maps with duplicates in them. See Github issue
+    // #72 and bugzil.la/889492.
+    this._names = ArraySet.fromArray(names, true);
+    this._sources = ArraySet.fromArray(sources, true);
+
+    this.sourceRoot = sourceRoot;
+    this.sourcesContent = sourcesContent;
+    this._mappings = mappings;
+    this.file = file;
+  }
+
+  BasicSourceMapConsumer.prototype = Object.create(SourceMapConsumer.prototype);
+  BasicSourceMapConsumer.prototype.consumer = SourceMapConsumer;
+
+  /**
+   * Create a BasicSourceMapConsumer from a SourceMapGenerator.
+   *
+   * @param SourceMapGenerator aSourceMap
+   *        The source map that will be consumed.
+   * @returns BasicSourceMapConsumer
+   */
+  BasicSourceMapConsumer.fromSourceMap =
+    function SourceMapConsumer_fromSourceMap(aSourceMap) {
+      var smc = Object.create(BasicSourceMapConsumer.prototype);
+
+      smc._names = ArraySet.fromArray(aSourceMap._names.toArray(), true);
+      smc._sources = ArraySet.fromArray(aSourceMap._sources.toArray(), true);
+      smc.sourceRoot = aSourceMap._sourceRoot;
+      smc.sourcesContent = aSourceMap._generateSourcesContent(smc._sources.toArray(),
+                                                              smc.sourceRoot);
+      smc.file = aSourceMap._file;
+
+      smc.__generatedMappings = aSourceMap._mappings.toArray().slice();
+      smc.__originalMappings = aSourceMap._mappings.toArray().slice()
+        .sort(util.compareByOriginalPositions);
+
+      return smc;
+    };
+
+  /**
+   * The version of the source mapping spec that we are consuming.
+   */
+  BasicSourceMapConsumer.prototype._version = 3;
+
+  /**
+   * The list of original sources.
+   */
+  Object.defineProperty(BasicSourceMapConsumer.prototype, 'sources', {
+    get: function () {
+      return this._sources.toArray().map(function (s) {
+        return this.sourceRoot != null ? util.join(this.sourceRoot, s) : s;
+      }, this);
+    }
+  });
+
+  /**
+   * Parse the mappings in a string in to a data structure which we can easily
+   * query (the ordered arrays in the `this.__generatedMappings` and
+   * `this.__originalMappings` properties).
+   */
+  BasicSourceMapConsumer.prototype._parseMappings =
+    function SourceMapConsumer_parseMappings(aStr, aSourceRoot) {
+      var generatedLine = 1;
+      var previousGeneratedColumn = 0;
+      var previousOriginalLine = 0;
+      var previousOriginalColumn = 0;
+      var previousSource = 0;
+      var previousName = 0;
+      var str = aStr;
+      var temp = {};
+      var mapping;
+
+      while (str.length > 0) {
+        if (str.charAt(0) === ';') {
+          generatedLine++;
+          str = str.slice(1);
+          previousGeneratedColumn = 0;
+        }
+        else if (str.charAt(0) === ',') {
+          str = str.slice(1);
+        }
+        else {
+          mapping = {};
+          mapping.generatedLine = generatedLine;
+
+          // Generated column.
+          base64VLQ.decode(str, temp);
+          mapping.generatedColumn = previousGeneratedColumn + temp.value;
+          previousGeneratedColumn = mapping.generatedColumn;
+          str = temp.rest;
+
+          if (str.length > 0 && !this._nextCharIsMappingSeparator(str)) {
+            // Original source.
+            base64VLQ.decode(str, temp);
+            mapping.source = this._sources.at(previousSource + temp.value);
+            previousSource += temp.value;
+            str = temp.rest;
+            if (str.length === 0 || this._nextCharIsMappingSeparator(str)) {
+              throw new Error('Found a source, but no line and column');
+            }
+
+            // Original line.
+            base64VLQ.decode(str, temp);
+            mapping.originalLine = previousOriginalLine + temp.value;
+            previousOriginalLine = mapping.originalLine;
+            // Lines are stored 0-based
+            mapping.originalLine += 1;
+            str = temp.rest;
+            if (str.length === 0 || this._nextCharIsMappingSeparator(str)) {
+              throw new Error('Found a source and line, but no column');
+            }
+
+            // Original column.
+            base64VLQ.decode(str, temp);
+            mapping.originalColumn = previousOriginalColumn + temp.value;
+            previousOriginalColumn = mapping.originalColumn;
+            str = temp.rest;
+
+            if (str.length > 0 && !this._nextCharIsMappingSeparator(str)) {
+              // Original name.
+              base64VLQ.decode(str, temp);
+              mapping.name = this._names.at(previousName + temp.value);
+              previousName += temp.value;
+              str = temp.rest;
+            }
+          }
+
+          this.__generatedMappings.push(mapping);
+          if (typeof mapping.originalLine === 'number') {
+            this.__originalMappings.push(mapping);
+          }
+        }
+      }
+
+      this.__generatedMappings.sort(util.compareByGeneratedPositions);
+      this.__originalMappings.sort(util.compareByOriginalPositions);
+    };
+
+  /**
+   * Find the mapping that best matches the hypothetical "needle" mapping that
+   * we are searching for in the given "haystack" of mappings.
+   */
+  BasicSourceMapConsumer.prototype._findMapping =
+    function SourceMapConsumer_findMapping(aNeedle, aMappings, aLineName,
+                                           aColumnName, aComparator) {
+      // To return the position we are searching for, we must first find the
+      // mapping for the given position and then return the opposite position it
+      // points to. Because the mappings are sorted, we can use binary search to
+      // find the best mapping.
+
+      if (aNeedle[aLineName] <= 0) {
+        throw new TypeError('Line must be greater than or equal to 1, got '
+                            + aNeedle[aLineName]);
+      }
+      if (aNeedle[aColumnName] < 0) {
+        throw new TypeError('Column must be greater than or equal to 0, got '
+                            + aNeedle[aColumnName]);
+      }
+
+      return binarySearch.search(aNeedle, aMappings, aComparator);
+    };
+
+  /**
+   * Compute the last column for each generated mapping. The last column is
+   * inclusive.
+   */
+  BasicSourceMapConsumer.prototype.computeColumnSpans =
+    function SourceMapConsumer_computeColumnSpans() {
+      for (var index = 0; index < this._generatedMappings.length; ++index) {
+        var mapping = this._generatedMappings[index];
+
+        // Mappings do not contain a field for the last generated columnt. We
+        // can come up with an optimistic estimate, however, by assuming that
+        // mappings are contiguous (i.e. given two consecutive mappings, the
+        // first mapping ends where the second one starts).
+        if (index + 1 < this._generatedMappings.length) {
+          var nextMapping = this._generatedMappings[index + 1];
+
+          if (mapping.generatedLine === nextMapping.generatedLine) {
+            mapping.lastGeneratedColumn = nextMapping.generatedColumn - 1;
+            continue;
+          }
+        }
+
+        // The last mapping for each line spans the entire line.
+        mapping.lastGeneratedColumn = Infinity;
+      }
+    };
+
+  /**
+   * Returns the original source, line, and column information for the generated
+   * source's line and column positions provided. The only argument is an object
+   * with the following properties:
+   *
+   *   - line: The line number in the generated source.
+   *   - column: The column number in the generated source.
+   *
+   * and an object is returned with the following properties:
+   *
+   *   - source: The original source file, or null.
+   *   - line: The line number in the original source, or null.
+   *   - column: The column number in the original source, or null.
+   *   - name: The original identifier, or null.
+   */
+  BasicSourceMapConsumer.prototype.originalPositionFor =
+    function SourceMapConsumer_originalPositionFor(aArgs) {
+      var needle = {
+        generatedLine: util.getArg(aArgs, 'line'),
+        generatedColumn: util.getArg(aArgs, 'column')
+      };
+
+      var index = this._findMapping(needle,
+                                    this._generatedMappings,
+                                    "generatedLine",
+                                    "generatedColumn",
+                                    util.compareByGeneratedPositions);
+
+      if (index >= 0) {
+        var mapping = this._generatedMappings[index];
+
+        if (mapping.generatedLine === needle.generatedLine) {
+          var source = util.getArg(mapping, 'source', null);
+          if (source != null && this.sourceRoot != null) {
+            source = util.join(this.sourceRoot, source);
+          }
+          return {
+            source: source,
+            line: util.getArg(mapping, 'originalLine', null),
+            column: util.getArg(mapping, 'originalColumn', null),
+            name: util.getArg(mapping, 'name', null)
+          };
+        }
+      }
+
+      return {
+        source: null,
+        line: null,
+        column: null,
+        name: null
+      };
+    };
+
+  /**
+   * Returns the original source content. The only argument is the url of the
+   * original source file. Returns null if no original source content is
+   * availible.
+   */
+  BasicSourceMapConsumer.prototype.sourceContentFor =
+    function SourceMapConsumer_sourceContentFor(aSource, nullOnMissing) {
+      if (!this.sourcesContent) {
+        return null;
+      }
+
+      if (this.sourceRoot != null) {
+        aSource = util.relative(this.sourceRoot, aSource);
+      }
+
+      if (this._sources.has(aSource)) {
+        return this.sourcesContent[this._sources.indexOf(aSource)];
+      }
+
+      var url;
+      if (this.sourceRoot != null
+          && (url = util.urlParse(this.sourceRoot))) {
+        // XXX: file:// URIs and absolute paths lead to unexpected behavior for
+        // many users. We can help them out when they expect file:// URIs to
+        // behave like it would if they were running a local HTTP server. See
+        // https://bugzilla.mozilla.org/show_bug.cgi?id=885597.
+        var fileUriAbsPath = aSource.replace(/^file:\/\//, "");
+        if (url.scheme == "file"
+            && this._sources.has(fileUriAbsPath)) {
+          return this.sourcesContent[this._sources.indexOf(fileUriAbsPath)]
+        }
+
+        if ((!url.path || url.path == "/")
+            && this._sources.has("/" + aSource)) {
+          return this.sourcesContent[this._sources.indexOf("/" + aSource)];
+        }
+      }
+
+      // This function is used recursively from
+      // IndexedSourceMapConsumer.prototype.sourceContentFor. In that case, we
+      // don't want to throw if we can't find the source - we just want to
+      // return null, so we provide a flag to exit gracefully.
+      if (nullOnMissing) {
+        return null;
+      }
+      else {
+        throw new Error('"' + aSource + '" is not in the SourceMap.');
+      }
+    };
+
+  /**
+   * Returns the generated line and column information for the original source,
+   * line, and column positions provided. The only argument is an object with
+   * the following properties:
+   *
+   *   - source: The filename of the original source.
+   *   - line: The line number in the original source.
+   *   - column: The column number in the original source.
+   *
+   * and an object is returned with the following properties:
+   *
+   *   - line: The line number in the generated source, or null.
+   *   - column: The column number in the generated source, or null.
+   */
+  BasicSourceMapConsumer.prototype.generatedPositionFor =
+    function SourceMapConsumer_generatedPositionFor(aArgs) {
+      var needle = {
+        source: util.getArg(aArgs, 'source'),
+        originalLine: util.getArg(aArgs, 'line'),
+        originalColumn: util.getArg(aArgs, 'column')
+      };
+
+      if (this.sourceRoot != null) {
+        needle.source = util.relative(this.sourceRoot, needle.source);
+      }
+
+      var index = this._findMapping(needle,
+                                    this._originalMappings,
+                                    "originalLine",
+                                    "originalColumn",
+                                    util.compareByOriginalPositions);
+
+      if (index >= 0) {
+        var mapping = this._originalMappings[index];
+
+        return {
+          line: util.getArg(mapping, 'generatedLine', null),
+          column: util.getArg(mapping, 'generatedColumn', null),
+          lastColumn: util.getArg(mapping, 'lastGeneratedColumn', null)
+        };
+      }
+
+      return {
+        line: null,
+        column: null,
+        lastColumn: null
+      };
+    };
+
+  exports.BasicSourceMapConsumer = BasicSourceMapConsumer;
+
+});
+
+},{"./array-set":14,"./base64-vlq":15,"./binary-search":18,"./source-map-consumer":21,"./util":24,"amdefine":25}],18:[function(require,module,exports){
+/* -*- Mode: js; js-indent-level: 2; -*- */
+/*
+ * Copyright 2011 Mozilla Foundation and contributors
+ * Licensed under the New BSD license. See LICENSE or:
+ * http://opensource.org/licenses/BSD-3-Clause
+ */
+if (typeof define !== 'function') {
+    var define = require('amdefine')(module, require);
+}
+define(function (require, exports, module) {
   /**
    * Recursive implementation of binary search.
    *
@@ -2381,18 +2843,21 @@ define(function (require, exports, module) {
    * @param aNeedle The element being searched for.
    * @param aHaystack The non-empty array being searched.
    * @param aCompare Function which takes two elements and returns -1, 0, or 1.
+   * @param aBias Either 'binarySearch.LEAST_UPPER_BOUND' or
+   *     'binarySearch.GREATEST_LOWER_BOUND'. Specifies whether to return the
+   *     closest element that is smaller than or greater than the element we are
+   *     searching for if the exact element cannot be found.
    */
-  function recursiveSearch(aLow, aHigh, aNeedle, aHaystack, aCompare) {
+  function recursiveSearch(aLow, aHigh, aNeedle, aHaystack, aCompare, aBias) {
     // This function terminates when one of the following is true:
     //
     //   1. We find the exact element we are looking for.
     //
     //   2. We did not find the exact element, but we can return the index of
-    //      the next closest element that is less than that element.
+    //      the next closest element.
     //
     //   3. We did not find the exact element, and there is no next-closest
-    //      element which is less than the one we are searching for, so we
-    //      return -1.
+    //      element than the one we are searching for, so we return -1.
     var mid = Math.floor((aHigh - aLow) / 2) + aLow;
     var cmp = aCompare(aNeedle, aHaystack[mid], true);
     if (cmp === 0) {
@@ -2400,30 +2865,41 @@ define(function (require, exports, module) {
       return mid;
     }
     else if (cmp > 0) {
-      // aHaystack[mid] is greater than our needle.
+      // Our needle is greater than aHaystack[mid].
       if (aHigh - mid > 1) {
         // The element is in the upper half.
-        return recursiveSearch(mid, aHigh, aNeedle, aHaystack, aCompare);
-      }
-      // We did not find an exact match, return the next closest one
-      // (termination case 2).
-      return mid;
-    }
-    else {
-      // aHaystack[mid] is less than our needle.
-      if (mid - aLow > 1) {
-        // The element is in the lower half.
-        return recursiveSearch(aLow, mid, aNeedle, aHaystack, aCompare);
+        return recursiveSearch(mid, aHigh, aNeedle, aHaystack, aCompare, aBias);
       }
       // The exact needle element was not found in this haystack. Determine if
-      // we are in termination case (2) or (3) and return the appropriate thing.
-      return aLow < 0 ? -1 : aLow;
+      // we are in termination case (3) or (2) and return the appropriate thing.
+      if (aBias == exports.LEAST_UPPER_BOUND) {
+        return aHigh < aHaystack.length ? aHigh : -1;
+      } else {
+        return mid;
+      }
+    }
+    else {
+      // Our needle is less than aHaystack[mid].
+      if (mid - aLow > 1) {
+        // The element is in the lower half.
+        return recursiveSearch(aLow, mid, aNeedle, aHaystack, aCompare, aBias);
+      }
+      // The exact needle element was not found in this haystack. Determine if
+      // we are in termination case (3) or (2) and return the appropriate thing.
+      if (aBias == exports.LEAST_UPPER_BOUND) {
+        return mid;
+      } else {
+        return aLow < 0 ? -1 : aLow;
+      }
     }
   }
 
+  exports.LEAST_UPPER_BOUND = 1;
+  exports.GREATEST_LOWER_BOUND = 2;
+
   /**
    * This is an implementation of binary search which will always try and return
-   * the index of next lowest value checked if there is no exact hit. This is
+   * the index of next highest value checked if there is no exact hit. This is
    * because mappings between original and generated line/col pairs are single
    * points, and there is an implicit region between each of them, so a miss
    * just means that you aren't on the very start of a region.
@@ -2433,17 +2909,329 @@ define(function (require, exports, module) {
    * @param aCompare A function which takes the needle and an element in the
    *     array and returns -1, 0, or 1 depending on whether the needle is less
    *     than, equal to, or greater than the element, respectively.
+   * @param aBias Either 'exports.LEAST_UPPER_BOUND' or
+   *     'exports.GREATEST_LOWER_BOUND'. Specifies whether to return the
+   *     closest element that is smaller than or greater than the element we are
+   *     searching for if the exact element cannot be found. Defaults to
+   *     'exports.LEAST_UPPER_BOUND'.
    */
-  exports.search = function search(aNeedle, aHaystack, aCompare) {
+  exports.search = function search(aNeedle, aHaystack, aCompare, aBias) {
+    var aBias = aBias || exports.LEAST_UPPER_BOUND;
+
     if (aHaystack.length === 0) {
       return -1;
     }
-    return recursiveSearch(-1, aHaystack.length, aNeedle, aHaystack, aCompare)
+    return recursiveSearch(-1, aHaystack.length, aNeedle, aHaystack, aCompare, aBias)
   };
 
 });
 
-},{"amdefine":23}],18:[function(require,module,exports){
+},{"amdefine":25}],19:[function(require,module,exports){
+/* -*- Mode: js; js-indent-level: 2; -*- */
+/*
+ * Copyright 2011 Mozilla Foundation and contributors
+ * Licensed under the New BSD license. See LICENSE or:
+ * http://opensource.org/licenses/BSD-3-Clause
+ */
+if (typeof define !== 'function') {
+    var define = require('amdefine')(module, require);
+}
+define(function (require, exports, module) {
+
+  var util = require('./util');
+  var binarySearch = require('./binary-search');
+  var SourceMapConsumer = require('./source-map-consumer').SourceMapConsumer;
+  var BasicSourceMapConsumer = require('./basic-source-map-consumer').BasicSourceMapConsumer;
+
+  /**
+   * An IndexedSourceMapConsumer instance represents a parsed source map which
+   * we can query for information. It differs from BasicSourceMapConsumer in
+   * that it takes "indexed" source maps (i.e. ones with a "sections" field) as
+   * input.
+   *
+   * The only parameter is a raw source map (either as a JSON string, or already
+   * parsed to an object). According to the spec for indexed source maps, they
+   * have the following attributes:
+   *
+   *   - version: Which version of the source map spec this map is following.
+   *   - file: Optional. The generated file this source map is associated with.
+   *   - sections: A list of section definitions.
+   *
+   * Each value under the "sections" field has two fields:
+   *   - offset: The offset into the original specified at which this section
+   *       begins to apply, defined as an object with a "line" and "column"
+   *       field.
+   *   - map: A source map definition. This source map could also be indexed,
+   *       but doesn't have to be.
+   *
+   * Instead of the "map" field, it's also possible to have a "url" field
+   * specifying a URL to retrieve a source map from, but that's currently
+   * unsupported.
+   *
+   * Here's an example source map, taken from the source map spec[0], but
+   * modified to omit a section which uses the "url" field.
+   *
+   *  {
+   *    version : 3,
+   *    file: "app.js",
+   *    sections: [{
+   *      offset: {line:100, column:10},
+   *      map: {
+   *        version : 3,
+   *        file: "section.js",
+   *        sources: ["foo.js", "bar.js"],
+   *        names: ["src", "maps", "are", "fun"],
+   *        mappings: "AAAA,E;;ABCDE;"
+   *      }
+   *    }],
+   *  }
+   *
+   * [0]: https://docs.google.com/document/d/1U1RGAehQwRypUTovF1KRlpiOFze0b-_2gc6fAH0KY0k/edit#heading=h.535es3xeprgt
+   */
+  function IndexedSourceMapConsumer(aSourceMap) {
+    var sourceMap = aSourceMap;
+    if (typeof aSourceMap === 'string') {
+      sourceMap = JSON.parse(aSourceMap.replace(/^\)\]\}'/, ''));
+    }
+
+    var version = util.getArg(sourceMap, 'version');
+    var sections = util.getArg(sourceMap, 'sections');
+
+    if (version != this._version) {
+      throw new Error('Unsupported version: ' + version);
+    }
+
+    var lastOffset = {
+      line: -1,
+      column: 0
+    };
+    this._sections = sections.map(function (s) {
+      if (s.url) {
+        // The url field will require support for asynchronicity.
+        // See https://github.com/mozilla/source-map/issues/16
+        throw new Error('Support for url field in sections not implemented.');
+      }
+      var offset = util.getArg(s, 'offset');
+      var offsetLine = util.getArg(offset, 'line');
+      var offsetColumn = util.getArg(offset, 'column');
+
+      if (offsetLine < lastOffset.line ||
+          (offsetLine === lastOffset.line && offsetColumn < lastOffset.column)) {
+        throw new Error('Section offsets must be ordered and non-overlapping.');
+      }
+      lastOffset = offset;
+
+      return {
+        generatedOffset: {
+          // The offset fields are 0-based, but we use 1-based indices when
+          // encoding/decoding from VLQ.
+          generatedLine: offsetLine + 1,
+          generatedColumn: offsetColumn + 1
+        },
+        consumer: new SourceMapConsumer(util.getArg(s, 'map'))
+      }
+    });
+  }
+
+  IndexedSourceMapConsumer.prototype = Object.create(SourceMapConsumer.prototype);
+  IndexedSourceMapConsumer.prototype.constructor = SourceMapConsumer;
+
+  /**
+   * The version of the source mapping spec that we are consuming.
+   */
+  IndexedSourceMapConsumer.prototype._version = 3;
+
+  /**
+   * The list of original sources.
+   */
+  Object.defineProperty(IndexedSourceMapConsumer.prototype, 'sources', {
+    get: function () {
+      var sources = [];
+      for (var i = 0; i < this._sections.length; i++) {
+        for (var j = 0; j < this._sections[i].consumer.sources.length; j++) {
+          sources.push(this._sections[i].consumer.sources[j]);
+        }
+      };
+      return sources;
+    }
+  });
+
+  /**
+   * Returns the original source, line, and column information for the generated
+   * source's line and column positions provided. The only argument is an object
+   * with the following properties:
+   *
+   *   - line: The line number in the generated source.
+   *   - column: The column number in the generated source.
+   *
+   * and an object is returned with the following properties:
+   *
+   *   - source: The original source file, or null.
+   *   - line: The line number in the original source, or null.
+   *   - column: The column number in the original source, or null.
+   *   - name: The original identifier, or null.
+   */
+  IndexedSourceMapConsumer.prototype.originalPositionFor =
+    function IndexedSourceMapConsumer_originalPositionFor(aArgs) {
+      var needle = {
+        generatedLine: util.getArg(aArgs, 'line'),
+        generatedColumn: util.getArg(aArgs, 'column')
+      };
+
+      // Find the section containing the generated position we're trying to map
+      // to an original position.
+      var sectionIndex = binarySearch.search(needle, this._sections,
+        function(needle, section) {
+          var cmp = needle.generatedLine - section.generatedOffset.generatedLine;
+          if (cmp) {
+            return cmp;
+          }
+
+          return (needle.generatedColumn -
+                  section.generatedOffset.generatedColumn);
+        }, binarySearch.GREATEST_LOWER_BOUND);
+      var section = this._sections[sectionIndex];
+
+      if (!section) {
+        return {
+          source: null,
+          line: null,
+          column: null,
+          name: null
+        };
+      }
+
+      return section.consumer.originalPositionFor({
+        line: needle.generatedLine -
+          (section.generatedOffset.generatedLine - 1),
+        column: needle.generatedColumn -
+          (section.generatedOffset.generatedLine === needle.generatedLine
+           ? section.generatedOffset.generatedColumn - 1
+           : 0)
+      });
+    };
+
+  /**
+   * Returns the original source content. The only argument is the url of the
+   * original source file. Returns null if no original source content is
+   * available.
+   */
+  IndexedSourceMapConsumer.prototype.sourceContentFor =
+    function IndexedSourceMapConsumer_sourceContentFor(aSource, nullOnMissing) {
+      for (var i = 0; i < this._sections.length; i++) {
+        var section = this._sections[i];
+
+        var content = section.consumer.sourceContentFor(aSource, true);
+        if (content) {
+          return content;
+        }
+      }
+      if (nullOnMissing) {
+        return null;
+      }
+      else {
+        throw new Error('"' + aSource + '" is not in the SourceMap.');
+      }
+    };
+
+  /**
+   * Returns the generated line and column information for the original source,
+   * line, and column positions provided. The only argument is an object with
+   * the following properties:
+   *
+   *   - source: The filename of the original source.
+   *   - line: The line number in the original source.
+   *   - column: The column number in the original source.
+   *
+   * and an object is returned with the following properties:
+   *
+   *   - line: The line number in the generated source, or null.
+   *   - column: The column number in the generated source, or null.
+   */
+  IndexedSourceMapConsumer.prototype.generatedPositionFor =
+    function IndexedSourceMapConsumer_generatedPositionFor(aArgs) {
+      for (var i = 0; i < this._sections.length; i++) {
+        var section = this._sections[i];
+
+        // Only consider this section if the requested source is in the list of
+        // sources of the consumer.
+        if (section.consumer.sources.indexOf(util.getArg(aArgs, 'source')) === -1) {
+          continue;
+        }
+        var generatedPosition = section.consumer.generatedPositionFor(aArgs);
+        if (generatedPosition) {
+          var ret = {
+            line: generatedPosition.line +
+              (section.generatedOffset.generatedLine - 1),
+            column: generatedPosition.column +
+              (section.generatedOffset.generatedLine === generatedPosition.line
+               ? section.generatedOffset.generatedColumn - 1
+               : 0)
+          };
+          return ret;
+        }
+      }
+
+      return {
+        line: null,
+        column: null
+      };
+    };
+
+  /**
+   * Parse the mappings in a string in to a data structure which we can easily
+   * query (the ordered arrays in the `this.__generatedMappings` and
+   * `this.__originalMappings` properties).
+   */
+  IndexedSourceMapConsumer.prototype._parseMappings =
+    function IndexedSourceMapConsumer_parseMappings(aStr, aSourceRoot) {
+      this.__generatedMappings = [];
+      this.__originalMappings = [];
+      for (var i = 0; i < this._sections.length; i++) {
+        var section = this._sections[i];
+        var sectionMappings = section.consumer._generatedMappings;
+        for (var j = 0; j < sectionMappings.length; j++) {
+          var mapping = sectionMappings[i];
+
+          var source = mapping.source;
+          var sourceRoot = section.consumer.sourceRoot;
+
+          if (source != null && sourceRoot != null) {
+            source = util.join(sourceRoot, source);
+          }
+
+          // The mappings coming from the consumer for the section have
+          // generated positions relative to the start of the section, so we
+          // need to offset them to be relative to the start of the concatenated
+          // generated file.
+          var adjustedMapping = {
+            source: source,
+            generatedLine: mapping.generatedLine +
+              (section.generatedOffset.generatedLine - 1),
+            generatedColumn: mapping.column +
+              (section.generatedOffset.generatedLine === mapping.generatedLine)
+              ? section.generatedOffset.generatedColumn - 1
+              : 0,
+            originalLine: mapping.originalLine,
+            originalColumn: mapping.originalColumn,
+            name: mapping.name
+          };
+
+          this.__generatedMappings.push(adjustedMapping);
+          if (typeof adjustedMapping.originalLine === 'number') {
+            this.__originalMappings.push(adjustedMapping);
+          }
+        };
+      };
+
+    this.__generatedMappings.sort(util.compareByGeneratedPositions);
+    this.__originalMappings.sort(util.compareByOriginalPositions);
+  };
+
+  exports.IndexedSourceMapConsumer = IndexedSourceMapConsumer;
+});
+
+},{"./basic-source-map-consumer":17,"./binary-search":18,"./source-map-consumer":21,"./util":24,"amdefine":25}],20:[function(require,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2014 Mozilla Foundation and contributors
@@ -2531,7 +3319,1767 @@ define(function (require, exports, module) {
 
 });
 
-},{"./util":22,"amdefine":23}],19:[function(require,module,exports){
+},{"./util":24,"amdefine":25}],21:[function(require,module,exports){
+/* -*- Mode: js; js-indent-level: 2; -*- */
+/*
+ * Copyright 2011 Mozilla Foundation and contributors
+ * Licensed under the New BSD license. See LICENSE or:
+ * http://opensource.org/licenses/BSD-3-Clause
+ */
+if (typeof define !== 'function') {
+    var define = require('amdefine')(module, require);
+}
+define(function (require, exports, module) {
+
+  var util = require('./util');
+
+  function SourceMapConsumer(aSourceMap) {
+    var sourceMap = aSourceMap;
+    if (typeof aSourceMap === 'string') {
+      sourceMap = JSON.parse(aSourceMap.replace(/^\)\]\}'/, ''));
+    }
+
+    // We do late requires because the subclasses require() this file.
+    if (sourceMap.sections != null) {
+      var indexedSourceMapConsumer = require('./indexed-source-map-consumer');
+      return new indexedSourceMapConsumer.IndexedSourceMapConsumer(sourceMap);
+    } else {
+      var basicSourceMapConsumer = require('./basic-source-map-consumer');
+      return new basicSourceMapConsumer.BasicSourceMapConsumer(sourceMap);
+    }
+  }
+
+  SourceMapConsumer.fromSourceMap = function(aSourceMap) {
+    var basicSourceMapConsumer = require('./basic-source-map-consumer');
+    return basicSourceMapConsumer.BasicSourceMapConsumer
+            .fromSourceMap(aSourceMap);
+  }
+
+  /**
+   * The version of the source mapping spec that we are consuming.
+   */
+  SourceMapConsumer.prototype._version = 3;
+
+
+  // `__generatedMappings` and `__originalMappings` are arrays that hold the
+  // parsed mapping coordinates from the source map's "mappings" attribute. They
+  // are lazily instantiated, accessed via the `_generatedMappings` and
+  // `_originalMappings` getters respectively, and we only parse the mappings
+  // and create these arrays once queried for a source location. We jump through
+  // these hoops because there can be many thousands of mappings, and parsing
+  // them is expensive, so we only want to do it if we must.
+  //
+  // Each object in the arrays is of the form:
+  //
+  //     {
+  //       generatedLine: The line number in the generated code,
+  //       generatedColumn: The column number in the generated code,
+  //       source: The path to the original source file that generated this
+  //               chunk of code,
+  //       originalLine: The line number in the original source that
+  //                     corresponds to this chunk of generated code,
+  //       originalColumn: The column number in the original source that
+  //                       corresponds to this chunk of generated code,
+  //       name: The name of the original symbol which generated this chunk of
+  //             code.
+  //     }
+  //
+  // All properties except for `generatedLine` and `generatedColumn` can be
+  // `null`.
+  //
+  // `_generatedMappings` is ordered by the generated positions.
+  //
+  // `_originalMappings` is ordered by the original positions.
+
+  SourceMapConsumer.prototype.__generatedMappings = null;
+  Object.defineProperty(SourceMapConsumer.prototype, '_generatedMappings', {
+    get: function () {
+      if (!this.__generatedMappings) {
+        this.__generatedMappings = [];
+        this.__originalMappings = [];
+        this._parseMappings(this._mappings, this.sourceRoot);
+      }
+
+      return this.__generatedMappings;
+    }
+  });
+
+  SourceMapConsumer.prototype.__originalMappings = null;
+  Object.defineProperty(SourceMapConsumer.prototype, '_originalMappings', {
+    get: function () {
+      if (!this.__originalMappings) {
+        this.__generatedMappings = [];
+        this.__originalMappings = [];
+        this._parseMappings(this._mappings, this.sourceRoot);
+      }
+
+      return this.__originalMappings;
+    }
+  });
+
+  SourceMapConsumer.prototype._nextCharIsMappingSeparator =
+    function SourceMapConsumer_nextCharIsMappingSeparator(aStr) {
+      var c = aStr.charAt(0);
+      return c === ";" || c === ",";
+    };
+
+  /**
+   * Parse the mappings in a string in to a data structure which we can easily
+   * query (the ordered arrays in the `this.__generatedMappings` and
+   * `this.__originalMappings` properties).
+   */
+  SourceMapConsumer.prototype._parseMappings =
+    function SourceMapConsumer_parseMappings(aStr, aSourceRoot) {
+      throw new Error("Subclasses must implement _parseMappings");
+    };
+
+  SourceMapConsumer.GENERATED_ORDER = 1;
+  SourceMapConsumer.ORIGINAL_ORDER = 2;
+
+  SourceMapConsumer.LEAST_UPPER_BOUND = 1;
+  SourceMapConsumer.GREATEST_LOWER_BOUND = 2;
+
+  /**
+   * Iterate over each mapping between an original source/line/column and a
+   * generated line/column in this source map.
+   *
+   * @param Function aCallback
+   *        The function that is called with each mapping.
+   * @param Object aContext
+   *        Optional. If specified, this object will be the value of `this` every
+   *        time that `aCallback` is called.
+   * @param aOrder
+   *        Either `SourceMapConsumer.GENERATED_ORDER` or
+   *        `SourceMapConsumer.ORIGINAL_ORDER`. Specifies whether you want to
+   *        iterate over the mappings sorted by the generated file's line/column
+   *        order or the original's source/line/column order, respectively. Defaults to
+   *        `SourceMapConsumer.GENERATED_ORDER`.
+   */
+  SourceMapConsumer.prototype.eachMapping =
+    function SourceMapConsumer_eachMapping(aCallback, aContext, aOrder) {
+      var context = aContext || null;
+      var order = aOrder || SourceMapConsumer.GENERATED_ORDER;
+
+      var mappings;
+      switch (order) {
+      case SourceMapConsumer.GENERATED_ORDER:
+        mappings = this._generatedMappings;
+        break;
+      case SourceMapConsumer.ORIGINAL_ORDER:
+        mappings = this._originalMappings;
+        break;
+      default:
+        throw new Error("Unknown order of iteration.");
+      }
+
+      var sourceRoot = this.sourceRoot;
+      mappings.map(function (mapping) {
+        var source = mapping.source;
+        if (source != null && sourceRoot != null) {
+          source = util.join(sourceRoot, source);
+        }
+        return {
+          source: source,
+          generatedLine: mapping.generatedLine,
+          generatedColumn: mapping.generatedColumn,
+          originalLine: mapping.originalLine,
+          originalColumn: mapping.originalColumn,
+          name: mapping.name
+        };
+      }).forEach(aCallback, context);
+    };
+
+  /**
+   * Returns all generated line and column information for the original source
+   * and line provided. The only argument is an object with the following
+   * properties:
+   *
+   *   - source: The filename of the original source.
+   *   - line: The line number in the original source.
+   *
+   * and an array of objects is returned, each with the following properties:
+   *
+   *   - line: The line number in the generated source, or null.
+   *   - column: The column number in the generated source, or null.
+   */
+  SourceMapConsumer.prototype.allGeneratedPositionsFor =
+    function SourceMapConsumer_allGeneratedPositionsFor(aArgs) {
+      var needle = {
+        source: util.getArg(aArgs, 'source'),
+        originalLine: util.getArg(aArgs, 'line'),
+        originalColumn: 0
+      };
+
+      if (this.sourceRoot != null) {
+        needle.source = util.relative(this.sourceRoot, needle.source);
+      }
+
+      var mappings = [];
+
+      var index = this._findMapping(needle,
+                                    this._originalMappings,
+                                    "originalLine",
+                                    "originalColumn",
+                                    util.compareByOriginalPositions);
+      if (index >= 0) {
+        var mapping = this._originalMappings[index];
+
+        // Iterate until either we run out of mappings, or we run into
+        // a mapping for a different line. Since mappings are sorted, this is
+        // guaranteed to find all mappings for the line we are interested in.
+        while (mapping && mapping.originalLine === needle.originalLine) {
+          mappings.push({
+            line: util.getArg(mapping, 'generatedLine', null),
+            column: util.getArg(mapping, 'generatedColumn', null),
+            lastColumn: util.getArg(mapping, 'lastGeneratedColumn', null)
+          });
+
+          mapping = this._originalMappings[++index];
+        }
+      }
+
+      return mappings;
+    };
+
+  exports.SourceMapConsumer = SourceMapConsumer;
+
+});
+
+},{"./basic-source-map-consumer":17,"./indexed-source-map-consumer":19,"./util":24,"amdefine":25}],22:[function(require,module,exports){
+/* -*- Mode: js; js-indent-level: 2; -*- */
+/*
+ * Copyright 2011 Mozilla Foundation and contributors
+ * Licensed under the New BSD license. See LICENSE or:
+ * http://opensource.org/licenses/BSD-3-Clause
+ */
+if (typeof define !== 'function') {
+    var define = require('amdefine')(module, require);
+}
+define(function (require, exports, module) {
+
+  var base64VLQ = require('./base64-vlq');
+  var util = require('./util');
+  var ArraySet = require('./array-set').ArraySet;
+  var MappingList = require('./mapping-list').MappingList;
+
+  /**
+   * An instance of the SourceMapGenerator represents a source map which is
+   * being built incrementally. You may pass an object with the following
+   * properties:
+   *
+   *   - file: The filename of the generated source.
+   *   - sourceRoot: A root for all relative URLs in this source map.
+   */
+  function SourceMapGenerator(aArgs) {
+    if (!aArgs) {
+      aArgs = {};
+    }
+    this._file = util.getArg(aArgs, 'file', null);
+    this._sourceRoot = util.getArg(aArgs, 'sourceRoot', null);
+    this._skipValidation = util.getArg(aArgs, 'skipValidation', false);
+    this._sources = new ArraySet();
+    this._names = new ArraySet();
+    this._mappings = new MappingList();
+    this._sourcesContents = null;
+  }
+
+  SourceMapGenerator.prototype._version = 3;
+
+  /**
+   * Creates a new SourceMapGenerator based on a SourceMapConsumer
+   *
+   * @param aSourceMapConsumer The SourceMap.
+   */
+  SourceMapGenerator.fromSourceMap =
+    function SourceMapGenerator_fromSourceMap(aSourceMapConsumer) {
+      var sourceRoot = aSourceMapConsumer.sourceRoot;
+      var generator = new SourceMapGenerator({
+        file: aSourceMapConsumer.file,
+        sourceRoot: sourceRoot
+      });
+      aSourceMapConsumer.eachMapping(function (mapping) {
+        var newMapping = {
+          generated: {
+            line: mapping.generatedLine,
+            column: mapping.generatedColumn
+          }
+        };
+
+        if (mapping.source != null) {
+          newMapping.source = mapping.source;
+          if (sourceRoot != null) {
+            newMapping.source = util.relative(sourceRoot, newMapping.source);
+          }
+
+          newMapping.original = {
+            line: mapping.originalLine,
+            column: mapping.originalColumn
+          };
+
+          if (mapping.name != null) {
+            newMapping.name = mapping.name;
+          }
+        }
+
+        generator.addMapping(newMapping);
+      });
+      aSourceMapConsumer.sources.forEach(function (sourceFile) {
+        var content = aSourceMapConsumer.sourceContentFor(sourceFile);
+        if (content != null) {
+          generator.setSourceContent(sourceFile, content);
+        }
+      });
+      return generator;
+    };
+
+  /**
+   * Add a single mapping from original source line and column to the generated
+   * source's line and column for this source map being created. The mapping
+   * object should have the following properties:
+   *
+   *   - generated: An object with the generated line and column positions.
+   *   - original: An object with the original line and column positions.
+   *   - source: The original source file (relative to the sourceRoot).
+   *   - name: An optional original token name for this mapping.
+   */
+  SourceMapGenerator.prototype.addMapping =
+    function SourceMapGenerator_addMapping(aArgs) {
+      var generated = util.getArg(aArgs, 'generated');
+      var original = util.getArg(aArgs, 'original', null);
+      var source = util.getArg(aArgs, 'source', null);
+      var name = util.getArg(aArgs, 'name', null);
+
+      if (!this._skipValidation) {
+        this._validateMapping(generated, original, source, name);
+      }
+
+      if (source != null && !this._sources.has(source)) {
+        this._sources.add(source);
+      }
+
+      if (name != null && !this._names.has(name)) {
+        this._names.add(name);
+      }
+
+      this._mappings.add({
+        generatedLine: generated.line,
+        generatedColumn: generated.column,
+        originalLine: original != null && original.line,
+        originalColumn: original != null && original.column,
+        source: source,
+        name: name
+      });
+    };
+
+  /**
+   * Set the source content for a source file.
+   */
+  SourceMapGenerator.prototype.setSourceContent =
+    function SourceMapGenerator_setSourceContent(aSourceFile, aSourceContent) {
+      var source = aSourceFile;
+      if (this._sourceRoot != null) {
+        source = util.relative(this._sourceRoot, source);
+      }
+
+      if (aSourceContent != null) {
+        // Add the source content to the _sourcesContents map.
+        // Create a new _sourcesContents map if the property is null.
+        if (!this._sourcesContents) {
+          this._sourcesContents = {};
+        }
+        this._sourcesContents[util.toSetString(source)] = aSourceContent;
+      } else if (this._sourcesContents) {
+        // Remove the source file from the _sourcesContents map.
+        // If the _sourcesContents map is empty, set the property to null.
+        delete this._sourcesContents[util.toSetString(source)];
+        if (Object.keys(this._sourcesContents).length === 0) {
+          this._sourcesContents = null;
+        }
+      }
+    };
+
+  /**
+   * Applies the mappings of a sub-source-map for a specific source file to the
+   * source map being generated. Each mapping to the supplied source file is
+   * rewritten using the supplied source map. Note: The resolution for the
+   * resulting mappings is the minimium of this map and the supplied map.
+   *
+   * @param aSourceMapConsumer The source map to be applied.
+   * @param aSourceFile Optional. The filename of the source file.
+   *        If omitted, SourceMapConsumer's file property will be used.
+   * @param aSourceMapPath Optional. The dirname of the path to the source map
+   *        to be applied. If relative, it is relative to the SourceMapConsumer.
+   *        This parameter is needed when the two source maps aren't in the same
+   *        directory, and the source map to be applied contains relative source
+   *        paths. If so, those relative source paths need to be rewritten
+   *        relative to the SourceMapGenerator.
+   */
+  SourceMapGenerator.prototype.applySourceMap =
+    function SourceMapGenerator_applySourceMap(aSourceMapConsumer, aSourceFile, aSourceMapPath) {
+      var sourceFile = aSourceFile;
+      // If aSourceFile is omitted, we will use the file property of the SourceMap
+      if (aSourceFile == null) {
+        if (aSourceMapConsumer.file == null) {
+          throw new Error(
+            'SourceMapGenerator.prototype.applySourceMap requires either an explicit source file, ' +
+            'or the source map\'s "file" property. Both were omitted.'
+          );
+        }
+        sourceFile = aSourceMapConsumer.file;
+      }
+      var sourceRoot = this._sourceRoot;
+      // Make "sourceFile" relative if an absolute Url is passed.
+      if (sourceRoot != null) {
+        sourceFile = util.relative(sourceRoot, sourceFile);
+      }
+      // Applying the SourceMap can add and remove items from the sources and
+      // the names array.
+      var newSources = new ArraySet();
+      var newNames = new ArraySet();
+
+      // Find mappings for the "sourceFile"
+      this._mappings.unsortedForEach(function (mapping) {
+        if (mapping.source === sourceFile && mapping.originalLine != null) {
+          // Check if it can be mapped by the source map, then update the mapping.
+          var original = aSourceMapConsumer.originalPositionFor({
+            line: mapping.originalLine,
+            column: mapping.originalColumn
+          });
+          if (original.source != null) {
+            // Copy mapping
+            mapping.source = original.source;
+            if (aSourceMapPath != null) {
+              mapping.source = util.join(aSourceMapPath, mapping.source)
+            }
+            if (sourceRoot != null) {
+              mapping.source = util.relative(sourceRoot, mapping.source);
+            }
+            mapping.originalLine = original.line;
+            mapping.originalColumn = original.column;
+            if (original.name != null) {
+              mapping.name = original.name;
+            }
+          }
+        }
+
+        var source = mapping.source;
+        if (source != null && !newSources.has(source)) {
+          newSources.add(source);
+        }
+
+        var name = mapping.name;
+        if (name != null && !newNames.has(name)) {
+          newNames.add(name);
+        }
+
+      }, this);
+      this._sources = newSources;
+      this._names = newNames;
+
+      // Copy sourcesContents of applied map.
+      aSourceMapConsumer.sources.forEach(function (sourceFile) {
+        var content = aSourceMapConsumer.sourceContentFor(sourceFile);
+        if (content != null) {
+          if (aSourceMapPath != null) {
+            sourceFile = util.join(aSourceMapPath, sourceFile);
+          }
+          if (sourceRoot != null) {
+            sourceFile = util.relative(sourceRoot, sourceFile);
+          }
+          this.setSourceContent(sourceFile, content);
+        }
+      }, this);
+    };
+
+  /**
+   * A mapping can have one of the three levels of data:
+   *
+   *   1. Just the generated position.
+   *   2. The Generated position, original position, and original source.
+   *   3. Generated and original position, original source, as well as a name
+   *      token.
+   *
+   * To maintain consistency, we validate that any new mapping being added falls
+   * in to one of these categories.
+   */
+  SourceMapGenerator.prototype._validateMapping =
+    function SourceMapGenerator_validateMapping(aGenerated, aOriginal, aSource,
+                                                aName) {
+      if (aGenerated && 'line' in aGenerated && 'column' in aGenerated
+          && aGenerated.line > 0 && aGenerated.column >= 0
+          && !aOriginal && !aSource && !aName) {
+        // Case 1.
+        return;
+      }
+      else if (aGenerated && 'line' in aGenerated && 'column' in aGenerated
+               && aOriginal && 'line' in aOriginal && 'column' in aOriginal
+               && aGenerated.line > 0 && aGenerated.column >= 0
+               && aOriginal.line > 0 && aOriginal.column >= 0
+               && aSource) {
+        // Cases 2 and 3.
+        return;
+      }
+      else {
+        throw new Error('Invalid mapping: ' + JSON.stringify({
+          generated: aGenerated,
+          source: aSource,
+          original: aOriginal,
+          name: aName
+        }));
+      }
+    };
+
+  /**
+   * Serialize the accumulated mappings in to the stream of base 64 VLQs
+   * specified by the source map format.
+   */
+  SourceMapGenerator.prototype._serializeMappings =
+    function SourceMapGenerator_serializeMappings() {
+      var previousGeneratedColumn = 0;
+      var previousGeneratedLine = 1;
+      var previousOriginalColumn = 0;
+      var previousOriginalLine = 0;
+      var previousName = 0;
+      var previousSource = 0;
+      var result = '';
+      var mapping;
+
+      var mappings = this._mappings.toArray();
+
+      for (var i = 0, len = mappings.length; i < len; i++) {
+        mapping = mappings[i];
+
+        if (mapping.generatedLine !== previousGeneratedLine) {
+          previousGeneratedColumn = 0;
+          while (mapping.generatedLine !== previousGeneratedLine) {
+            result += ';';
+            previousGeneratedLine++;
+          }
+        }
+        else {
+          if (i > 0) {
+            if (!util.compareByGeneratedPositions(mapping, mappings[i - 1])) {
+              continue;
+            }
+            result += ',';
+          }
+        }
+
+        result += base64VLQ.encode(mapping.generatedColumn
+                                   - previousGeneratedColumn);
+        previousGeneratedColumn = mapping.generatedColumn;
+
+        if (mapping.source != null) {
+          result += base64VLQ.encode(this._sources.indexOf(mapping.source)
+                                     - previousSource);
+          previousSource = this._sources.indexOf(mapping.source);
+
+          // lines are stored 0-based in SourceMap spec version 3
+          result += base64VLQ.encode(mapping.originalLine - 1
+                                     - previousOriginalLine);
+          previousOriginalLine = mapping.originalLine - 1;
+
+          result += base64VLQ.encode(mapping.originalColumn
+                                     - previousOriginalColumn);
+          previousOriginalColumn = mapping.originalColumn;
+
+          if (mapping.name != null) {
+            result += base64VLQ.encode(this._names.indexOf(mapping.name)
+                                       - previousName);
+            previousName = this._names.indexOf(mapping.name);
+          }
+        }
+      }
+
+      return result;
+    };
+
+  SourceMapGenerator.prototype._generateSourcesContent =
+    function SourceMapGenerator_generateSourcesContent(aSources, aSourceRoot) {
+      return aSources.map(function (source) {
+        if (!this._sourcesContents) {
+          return null;
+        }
+        if (aSourceRoot != null) {
+          source = util.relative(aSourceRoot, source);
+        }
+        var key = util.toSetString(source);
+        return Object.prototype.hasOwnProperty.call(this._sourcesContents,
+                                                    key)
+          ? this._sourcesContents[key]
+          : null;
+      }, this);
+    };
+
+  /**
+   * Externalize the source map.
+   */
+  SourceMapGenerator.prototype.toJSON =
+    function SourceMapGenerator_toJSON() {
+      var map = {
+        version: this._version,
+        sources: this._sources.toArray(),
+        names: this._names.toArray(),
+        mappings: this._serializeMappings()
+      };
+      if (this._file != null) {
+        map.file = this._file;
+      }
+      if (this._sourceRoot != null) {
+        map.sourceRoot = this._sourceRoot;
+      }
+      if (this._sourcesContents) {
+        map.sourcesContent = this._generateSourcesContent(map.sources, map.sourceRoot);
+      }
+
+      return map;
+    };
+
+  /**
+   * Render the source map being generated to a string.
+   */
+  SourceMapGenerator.prototype.toString =
+    function SourceMapGenerator_toString() {
+      return JSON.stringify(this.toJSON());
+    };
+
+  exports.SourceMapGenerator = SourceMapGenerator;
+
+});
+
+},{"./array-set":14,"./base64-vlq":15,"./mapping-list":20,"./util":24,"amdefine":25}],23:[function(require,module,exports){
+/* -*- Mode: js; js-indent-level: 2; -*- */
+/*
+ * Copyright 2011 Mozilla Foundation and contributors
+ * Licensed under the New BSD license. See LICENSE or:
+ * http://opensource.org/licenses/BSD-3-Clause
+ */
+if (typeof define !== 'function') {
+    var define = require('amdefine')(module, require);
+}
+define(function (require, exports, module) {
+
+  var SourceMapGenerator = require('./source-map-generator').SourceMapGenerator;
+  var util = require('./util');
+
+  // Matches a Windows-style `\r\n` newline or a `\n` newline used by all other
+  // operating systems these days (capturing the result).
+  var REGEX_NEWLINE = /(\r?\n)/;
+
+  // Newline character code for charCodeAt() comparisons
+  var NEWLINE_CODE = 10;
+
+  // Private symbol for identifying `SourceNode`s when multiple versions of
+  // the source-map library are loaded. This MUST NOT CHANGE across
+  // versions!
+  var isSourceNode = "$$$isSourceNode$$$";
+
+  /**
+   * SourceNodes provide a way to abstract over interpolating/concatenating
+   * snippets of generated JavaScript source code while maintaining the line and
+   * column information associated with the original source code.
+   *
+   * @param aLine The original line number.
+   * @param aColumn The original column number.
+   * @param aSource The original source's filename.
+   * @param aChunks Optional. An array of strings which are snippets of
+   *        generated JS, or other SourceNodes.
+   * @param aName The original identifier.
+   */
+  function SourceNode(aLine, aColumn, aSource, aChunks, aName) {
+    this.children = [];
+    this.sourceContents = {};
+    this.line = aLine == null ? null : aLine;
+    this.column = aColumn == null ? null : aColumn;
+    this.source = aSource == null ? null : aSource;
+    this.name = aName == null ? null : aName;
+    this[isSourceNode] = true;
+    if (aChunks != null) this.add(aChunks);
+  }
+
+  /**
+   * Creates a SourceNode from generated code and a SourceMapConsumer.
+   *
+   * @param aGeneratedCode The generated code
+   * @param aSourceMapConsumer The SourceMap for the generated code
+   * @param aRelativePath Optional. The path that relative sources in the
+   *        SourceMapConsumer should be relative to.
+   */
+  SourceNode.fromStringWithSourceMap =
+    function SourceNode_fromStringWithSourceMap(aGeneratedCode, aSourceMapConsumer, aRelativePath) {
+      // The SourceNode we want to fill with the generated code
+      // and the SourceMap
+      var node = new SourceNode();
+
+      // All even indices of this array are one line of the generated code,
+      // while all odd indices are the newlines between two adjacent lines
+      // (since `REGEX_NEWLINE` captures its match).
+      // Processed fragments are removed from this array, by calling `shiftNextLine`.
+      var remainingLines = aGeneratedCode.split(REGEX_NEWLINE);
+      var shiftNextLine = function() {
+        var lineContents = remainingLines.shift();
+        // The last line of a file might not have a newline.
+        var newLine = remainingLines.shift() || "";
+        return lineContents + newLine;
+      };
+
+      // We need to remember the position of "remainingLines"
+      var lastGeneratedLine = 1, lastGeneratedColumn = 0;
+
+      // The generate SourceNodes we need a code range.
+      // To extract it current and last mapping is used.
+      // Here we store the last mapping.
+      var lastMapping = null;
+
+      aSourceMapConsumer.eachMapping(function (mapping) {
+        if (lastMapping !== null) {
+          // We add the code from "lastMapping" to "mapping":
+          // First check if there is a new line in between.
+          if (lastGeneratedLine < mapping.generatedLine) {
+            var code = "";
+            // Associate first line with "lastMapping"
+            addMappingWithCode(lastMapping, shiftNextLine());
+            lastGeneratedLine++;
+            lastGeneratedColumn = 0;
+            // The remaining code is added without mapping
+          } else {
+            // There is no new line in between.
+            // Associate the code between "lastGeneratedColumn" and
+            // "mapping.generatedColumn" with "lastMapping"
+            var nextLine = remainingLines[0];
+            var code = nextLine.substr(0, mapping.generatedColumn -
+                                          lastGeneratedColumn);
+            remainingLines[0] = nextLine.substr(mapping.generatedColumn -
+                                                lastGeneratedColumn);
+            lastGeneratedColumn = mapping.generatedColumn;
+            addMappingWithCode(lastMapping, code);
+            // No more remaining code, continue
+            lastMapping = mapping;
+            return;
+          }
+        }
+        // We add the generated code until the first mapping
+        // to the SourceNode without any mapping.
+        // Each line is added as separate string.
+        while (lastGeneratedLine < mapping.generatedLine) {
+          node.add(shiftNextLine());
+          lastGeneratedLine++;
+        }
+        if (lastGeneratedColumn < mapping.generatedColumn) {
+          var nextLine = remainingLines[0];
+          node.add(nextLine.substr(0, mapping.generatedColumn));
+          remainingLines[0] = nextLine.substr(mapping.generatedColumn);
+          lastGeneratedColumn = mapping.generatedColumn;
+        }
+        lastMapping = mapping;
+      }, this);
+      // We have processed all mappings.
+      if (remainingLines.length > 0) {
+        if (lastMapping) {
+          // Associate the remaining code in the current line with "lastMapping"
+          addMappingWithCode(lastMapping, shiftNextLine());
+        }
+        // and add the remaining lines without any mapping
+        node.add(remainingLines.join(""));
+      }
+
+      // Copy sourcesContent into SourceNode
+      aSourceMapConsumer.sources.forEach(function (sourceFile) {
+        var content = aSourceMapConsumer.sourceContentFor(sourceFile);
+        if (content != null) {
+          if (aRelativePath != null) {
+            sourceFile = util.join(aRelativePath, sourceFile);
+          }
+          node.setSourceContent(sourceFile, content);
+        }
+      });
+
+      return node;
+
+      function addMappingWithCode(mapping, code) {
+        if (mapping === null || mapping.source === undefined) {
+          node.add(code);
+        } else {
+          var source = aRelativePath
+            ? util.join(aRelativePath, mapping.source)
+            : mapping.source;
+          node.add(new SourceNode(mapping.originalLine,
+                                  mapping.originalColumn,
+                                  source,
+                                  code,
+                                  mapping.name));
+        }
+      }
+    };
+
+  /**
+   * Add a chunk of generated JS to this source node.
+   *
+   * @param aChunk A string snippet of generated JS code, another instance of
+   *        SourceNode, or an array where each member is one of those things.
+   */
+  SourceNode.prototype.add = function SourceNode_add(aChunk) {
+    if (Array.isArray(aChunk)) {
+      aChunk.forEach(function (chunk) {
+        this.add(chunk);
+      }, this);
+    }
+    else if (aChunk[isSourceNode] || typeof aChunk === "string") {
+      if (aChunk) {
+        this.children.push(aChunk);
+      }
+    }
+    else {
+      throw new TypeError(
+        "Expected a SourceNode, string, or an array of SourceNodes and strings. Got " + aChunk
+      );
+    }
+    return this;
+  };
+
+  /**
+   * Add a chunk of generated JS to the beginning of this source node.
+   *
+   * @param aChunk A string snippet of generated JS code, another instance of
+   *        SourceNode, or an array where each member is one of those things.
+   */
+  SourceNode.prototype.prepend = function SourceNode_prepend(aChunk) {
+    if (Array.isArray(aChunk)) {
+      for (var i = aChunk.length-1; i >= 0; i--) {
+        this.prepend(aChunk[i]);
+      }
+    }
+    else if (aChunk[isSourceNode] || typeof aChunk === "string") {
+      this.children.unshift(aChunk);
+    }
+    else {
+      throw new TypeError(
+        "Expected a SourceNode, string, or an array of SourceNodes and strings. Got " + aChunk
+      );
+    }
+    return this;
+  };
+
+  /**
+   * Walk over the tree of JS snippets in this node and its children. The
+   * walking function is called once for each snippet of JS and is passed that
+   * snippet and the its original associated source's line/column location.
+   *
+   * @param aFn The traversal function.
+   */
+  SourceNode.prototype.walk = function SourceNode_walk(aFn) {
+    var chunk;
+    for (var i = 0, len = this.children.length; i < len; i++) {
+      chunk = this.children[i];
+      if (chunk[isSourceNode]) {
+        chunk.walk(aFn);
+      }
+      else {
+        if (chunk !== '') {
+          aFn(chunk, { source: this.source,
+                       line: this.line,
+                       column: this.column,
+                       name: this.name });
+        }
+      }
+    }
+  };
+
+  /**
+   * Like `String.prototype.join` except for SourceNodes. Inserts `aStr` between
+   * each of `this.children`.
+   *
+   * @param aSep The separator.
+   */
+  SourceNode.prototype.join = function SourceNode_join(aSep) {
+    var newChildren;
+    var i;
+    var len = this.children.length;
+    if (len > 0) {
+      newChildren = [];
+      for (i = 0; i < len-1; i++) {
+        newChildren.push(this.children[i]);
+        newChildren.push(aSep);
+      }
+      newChildren.push(this.children[i]);
+      this.children = newChildren;
+    }
+    return this;
+  };
+
+  /**
+   * Call String.prototype.replace on the very right-most source snippet. Useful
+   * for trimming whitespace from the end of a source node, etc.
+   *
+   * @param aPattern The pattern to replace.
+   * @param aReplacement The thing to replace the pattern with.
+   */
+  SourceNode.prototype.replaceRight = function SourceNode_replaceRight(aPattern, aReplacement) {
+    var lastChild = this.children[this.children.length - 1];
+    if (lastChild[isSourceNode]) {
+      lastChild.replaceRight(aPattern, aReplacement);
+    }
+    else if (typeof lastChild === 'string') {
+      this.children[this.children.length - 1] = lastChild.replace(aPattern, aReplacement);
+    }
+    else {
+      this.children.push(''.replace(aPattern, aReplacement));
+    }
+    return this;
+  };
+
+  /**
+   * Set the source content for a source file. This will be added to the SourceMapGenerator
+   * in the sourcesContent field.
+   *
+   * @param aSourceFile The filename of the source file
+   * @param aSourceContent The content of the source file
+   */
+  SourceNode.prototype.setSourceContent =
+    function SourceNode_setSourceContent(aSourceFile, aSourceContent) {
+      this.sourceContents[util.toSetString(aSourceFile)] = aSourceContent;
+    };
+
+  /**
+   * Walk over the tree of SourceNodes. The walking function is called for each
+   * source file content and is passed the filename and source content.
+   *
+   * @param aFn The traversal function.
+   */
+  SourceNode.prototype.walkSourceContents =
+    function SourceNode_walkSourceContents(aFn) {
+      for (var i = 0, len = this.children.length; i < len; i++) {
+        if (this.children[i][isSourceNode]) {
+          this.children[i].walkSourceContents(aFn);
+        }
+      }
+
+      var sources = Object.keys(this.sourceContents);
+      for (var i = 0, len = sources.length; i < len; i++) {
+        aFn(util.fromSetString(sources[i]), this.sourceContents[sources[i]]);
+      }
+    };
+
+  /**
+   * Return the string representation of this source node. Walks over the tree
+   * and concatenates all the various snippets together to one string.
+   */
+  SourceNode.prototype.toString = function SourceNode_toString() {
+    var str = "";
+    this.walk(function (chunk) {
+      str += chunk;
+    });
+    return str;
+  };
+
+  /**
+   * Returns the string representation of this source node along with a source
+   * map.
+   */
+  SourceNode.prototype.toStringWithSourceMap = function SourceNode_toStringWithSourceMap(aArgs) {
+    var generated = {
+      code: "",
+      line: 1,
+      column: 0
+    };
+    var map = new SourceMapGenerator(aArgs);
+    var sourceMappingActive = false;
+    var lastOriginalSource = null;
+    var lastOriginalLine = null;
+    var lastOriginalColumn = null;
+    var lastOriginalName = null;
+    this.walk(function (chunk, original) {
+      generated.code += chunk;
+      if (original.source !== null
+          && original.line !== null
+          && original.column !== null) {
+        if(lastOriginalSource !== original.source
+           || lastOriginalLine !== original.line
+           || lastOriginalColumn !== original.column
+           || lastOriginalName !== original.name) {
+          map.addMapping({
+            source: original.source,
+            original: {
+              line: original.line,
+              column: original.column
+            },
+            generated: {
+              line: generated.line,
+              column: generated.column
+            },
+            name: original.name
+          });
+        }
+        lastOriginalSource = original.source;
+        lastOriginalLine = original.line;
+        lastOriginalColumn = original.column;
+        lastOriginalName = original.name;
+        sourceMappingActive = true;
+      } else if (sourceMappingActive) {
+        map.addMapping({
+          generated: {
+            line: generated.line,
+            column: generated.column
+          }
+        });
+        lastOriginalSource = null;
+        sourceMappingActive = false;
+      }
+      for (var idx = 0, length = chunk.length; idx < length; idx++) {
+        if (chunk.charCodeAt(idx) === NEWLINE_CODE) {
+          generated.line++;
+          generated.column = 0;
+          // Mappings end at eol
+          if (idx + 1 === length) {
+            lastOriginalSource = null;
+            sourceMappingActive = false;
+          } else if (sourceMappingActive) {
+            map.addMapping({
+              source: original.source,
+              original: {
+                line: original.line,
+                column: original.column
+              },
+              generated: {
+                line: generated.line,
+                column: generated.column
+              },
+              name: original.name
+            });
+          }
+        } else {
+          generated.column++;
+        }
+      }
+    });
+    this.walkSourceContents(function (sourceFile, sourceContent) {
+      map.setSourceContent(sourceFile, sourceContent);
+    });
+
+    return { code: generated.code, map: map };
+  };
+
+  exports.SourceNode = SourceNode;
+
+});
+
+},{"./source-map-generator":22,"./util":24,"amdefine":25}],24:[function(require,module,exports){
+/* -*- Mode: js; js-indent-level: 2; -*- */
+/*
+ * Copyright 2011 Mozilla Foundation and contributors
+ * Licensed under the New BSD license. See LICENSE or:
+ * http://opensource.org/licenses/BSD-3-Clause
+ */
+if (typeof define !== 'function') {
+    var define = require('amdefine')(module, require);
+}
+define(function (require, exports, module) {
+
+  /**
+   * This is a helper function for getting values from parameter/options
+   * objects.
+   *
+   * @param args The object we are extracting values from
+   * @param name The name of the property we are getting.
+   * @param defaultValue An optional value to return if the property is missing
+   * from the object. If this is not specified and the property is missing, an
+   * error will be thrown.
+   */
+  function getArg(aArgs, aName, aDefaultValue) {
+    if (aName in aArgs) {
+      return aArgs[aName];
+    } else if (arguments.length === 3) {
+      return aDefaultValue;
+    } else {
+      throw new Error('"' + aName + '" is a required argument.');
+    }
+  }
+  exports.getArg = getArg;
+
+  var urlRegexp = /^(?:([\w+\-.]+):)?\/\/(?:(\w+:\w+)@)?([\w.]*)(?::(\d+))?(\S*)$/;
+  var dataUrlRegexp = /^data:.+\,.+$/;
+
+  function urlParse(aUrl) {
+    var match = aUrl.match(urlRegexp);
+    if (!match) {
+      return null;
+    }
+    return {
+      scheme: match[1],
+      auth: match[2],
+      host: match[3],
+      port: match[4],
+      path: match[5]
+    };
+  }
+  exports.urlParse = urlParse;
+
+  function urlGenerate(aParsedUrl) {
+    var url = '';
+    if (aParsedUrl.scheme) {
+      url += aParsedUrl.scheme + ':';
+    }
+    url += '//';
+    if (aParsedUrl.auth) {
+      url += aParsedUrl.auth + '@';
+    }
+    if (aParsedUrl.host) {
+      url += aParsedUrl.host;
+    }
+    if (aParsedUrl.port) {
+      url += ":" + aParsedUrl.port
+    }
+    if (aParsedUrl.path) {
+      url += aParsedUrl.path;
+    }
+    return url;
+  }
+  exports.urlGenerate = urlGenerate;
+
+  /**
+   * Normalizes a path, or the path portion of a URL:
+   *
+   * - Replaces consequtive slashes with one slash.
+   * - Removes unnecessary '.' parts.
+   * - Removes unnecessary '<dir>/..' parts.
+   *
+   * Based on code in the Node.js 'path' core module.
+   *
+   * @param aPath The path or url to normalize.
+   */
+  function normalize(aPath) {
+    var path = aPath;
+    var url = urlParse(aPath);
+    if (url) {
+      if (!url.path) {
+        return aPath;
+      }
+      path = url.path;
+    }
+    var isAbsolute = (path.charAt(0) === '/');
+
+    var parts = path.split(/\/+/);
+    for (var part, up = 0, i = parts.length - 1; i >= 0; i--) {
+      part = parts[i];
+      if (part === '.') {
+        parts.splice(i, 1);
+      } else if (part === '..') {
+        up++;
+      } else if (up > 0) {
+        if (part === '') {
+          // The first part is blank if the path is absolute. Trying to go
+          // above the root is a no-op. Therefore we can remove all '..' parts
+          // directly after the root.
+          parts.splice(i + 1, up);
+          up = 0;
+        } else {
+          parts.splice(i, 2);
+          up--;
+        }
+      }
+    }
+    path = parts.join('/');
+
+    if (path === '') {
+      path = isAbsolute ? '/' : '.';
+    }
+
+    if (url) {
+      url.path = path;
+      return urlGenerate(url);
+    }
+    return path;
+  }
+  exports.normalize = normalize;
+
+  /**
+   * Joins two paths/URLs.
+   *
+   * @param aRoot The root path or URL.
+   * @param aPath The path or URL to be joined with the root.
+   *
+   * - If aPath is a URL or a data URI, aPath is returned, unless aPath is a
+   *   scheme-relative URL: Then the scheme of aRoot, if any, is prepended
+   *   first.
+   * - Otherwise aPath is a path. If aRoot is a URL, then its path portion
+   *   is updated with the result and aRoot is returned. Otherwise the result
+   *   is returned.
+   *   - If aPath is absolute, the result is aPath.
+   *   - Otherwise the two paths are joined with a slash.
+   * - Joining for example 'http://' and 'www.example.com' is also supported.
+   */
+  function join(aRoot, aPath) {
+    if (aRoot === "") {
+      aRoot = ".";
+    }
+    if (aPath === "") {
+      aPath = ".";
+    }
+    var aPathUrl = urlParse(aPath);
+    var aRootUrl = urlParse(aRoot);
+    if (aRootUrl) {
+      aRoot = aRootUrl.path || '/';
+    }
+
+    // `join(foo, '//www.example.org')`
+    if (aPathUrl && !aPathUrl.scheme) {
+      if (aRootUrl) {
+        aPathUrl.scheme = aRootUrl.scheme;
+      }
+      return urlGenerate(aPathUrl);
+    }
+
+    if (aPathUrl || aPath.match(dataUrlRegexp)) {
+      return aPath;
+    }
+
+    // `join('http://', 'www.example.com')`
+    if (aRootUrl && !aRootUrl.host && !aRootUrl.path) {
+      aRootUrl.host = aPath;
+      return urlGenerate(aRootUrl);
+    }
+
+    var joined = aPath.charAt(0) === '/'
+      ? aPath
+      : normalize(aRoot.replace(/\/+$/, '') + '/' + aPath);
+
+    if (aRootUrl) {
+      aRootUrl.path = joined;
+      return urlGenerate(aRootUrl);
+    }
+    return joined;
+  }
+  exports.join = join;
+
+  /**
+   * Make a path relative to a URL or another path.
+   *
+   * @param aRoot The root path or URL.
+   * @param aPath The path or URL to be made relative to aRoot.
+   */
+  function relative(aRoot, aPath) {
+    if (aRoot === "") {
+      aRoot = ".";
+    }
+
+    aRoot = aRoot.replace(/\/$/, '');
+
+    // XXX: It is possible to remove this block, and the tests still pass!
+    var url = urlParse(aRoot);
+    if (aPath.charAt(0) == "/" && url && url.path == "/") {
+      return aPath.slice(1);
+    }
+
+    return aPath.indexOf(aRoot + '/') === 0
+      ? aPath.substr(aRoot.length + 1)
+      : aPath;
+  }
+  exports.relative = relative;
+
+  /**
+   * Because behavior goes wacky when you set `__proto__` on objects, we
+   * have to prefix all the strings in our set with an arbitrary character.
+   *
+   * See https://github.com/mozilla/source-map/pull/31 and
+   * https://github.com/mozilla/source-map/issues/30
+   *
+   * @param String aStr
+   */
+  function toSetString(aStr) {
+    return '$' + aStr;
+  }
+  exports.toSetString = toSetString;
+
+  function fromSetString(aStr) {
+    return aStr.substr(1);
+  }
+  exports.fromSetString = fromSetString;
+
+  function strcmp(aStr1, aStr2) {
+    var s1 = aStr1 || "";
+    var s2 = aStr2 || "";
+    return (s1 > s2) - (s1 < s2);
+  }
+
+  /**
+   * Comparator between two mappings where the original positions are compared.
+   *
+   * Optionally pass in `true` as `onlyCompareGenerated` to consider two
+   * mappings with the same original source/line/column, but different generated
+   * line and column the same. Useful when searching for a mapping with a
+   * stubbed out mapping.
+   */
+  function compareByOriginalPositions(mappingA, mappingB, onlyCompareOriginal) {
+    var cmp;
+
+    cmp = strcmp(mappingA.source, mappingB.source);
+    if (cmp) {
+      return cmp;
+    }
+
+    cmp = mappingA.originalLine - mappingB.originalLine;
+    if (cmp) {
+      return cmp;
+    }
+
+    cmp = mappingA.originalColumn - mappingB.originalColumn;
+    if (cmp || onlyCompareOriginal) {
+      return cmp;
+    }
+
+    cmp = strcmp(mappingA.name, mappingB.name);
+    if (cmp) {
+      return cmp;
+    }
+
+    cmp = mappingA.generatedLine - mappingB.generatedLine;
+    if (cmp) {
+      return cmp;
+    }
+
+    return mappingA.generatedColumn - mappingB.generatedColumn;
+  };
+  exports.compareByOriginalPositions = compareByOriginalPositions;
+
+  /**
+   * Comparator between two mappings where the generated positions are
+   * compared.
+   *
+   * Optionally pass in `true` as `onlyCompareGenerated` to consider two
+   * mappings with the same generated line and column, but different
+   * source/name/original line and column the same. Useful when searching for a
+   * mapping with a stubbed out mapping.
+   */
+  function compareByGeneratedPositions(mappingA, mappingB, onlyCompareGenerated) {
+    var cmp;
+
+    cmp = mappingA.generatedLine - mappingB.generatedLine;
+    if (cmp) {
+      return cmp;
+    }
+
+    cmp = mappingA.generatedColumn - mappingB.generatedColumn;
+    if (cmp || onlyCompareGenerated) {
+      return cmp;
+    }
+
+    cmp = strcmp(mappingA.source, mappingB.source);
+    if (cmp) {
+      return cmp;
+    }
+
+    cmp = mappingA.originalLine - mappingB.originalLine;
+    if (cmp) {
+      return cmp;
+    }
+
+    cmp = mappingA.originalColumn - mappingB.originalColumn;
+    if (cmp) {
+      return cmp;
+    }
+
+    return strcmp(mappingA.name, mappingB.name);
+  };
+  exports.compareByGeneratedPositions = compareByGeneratedPositions;
+
+});
+
+},{"amdefine":25}],25:[function(require,module,exports){
+(function (process,__filename){
+/** vim: et:ts=4:sw=4:sts=4
+ * @license amdefine 0.1.0 Copyright (c) 2011, The Dojo Foundation All Rights Reserved.
+ * Available via the MIT or new BSD license.
+ * see: http://github.com/jrburke/amdefine for details
+ */
+
+/*jslint node: true */
+/*global module, process */
+'use strict';
+
+/**
+ * Creates a define for node.
+ * @param {Object} module the "module" object that is defined by Node for the
+ * current module.
+ * @param {Function} [requireFn]. Node's require function for the current module.
+ * It only needs to be passed in Node versions before 0.5, when module.require
+ * did not exist.
+ * @returns {Function} a define function that is usable for the current node
+ * module.
+ */
+function amdefine(module, requireFn) {
+    'use strict';
+    var defineCache = {},
+        loaderCache = {},
+        alreadyCalled = false,
+        path = require('path'),
+        makeRequire, stringRequire;
+
+    /**
+     * Trims the . and .. from an array of path segments.
+     * It will keep a leading path segment if a .. will become
+     * the first path segment, to help with module name lookups,
+     * which act like paths, but can be remapped. But the end result,
+     * all paths that use this function should look normalized.
+     * NOTE: this method MODIFIES the input array.
+     * @param {Array} ary the array of path segments.
+     */
+    function trimDots(ary) {
+        var i, part;
+        for (i = 0; ary[i]; i+= 1) {
+            part = ary[i];
+            if (part === '.') {
+                ary.splice(i, 1);
+                i -= 1;
+            } else if (part === '..') {
+                if (i === 1 && (ary[2] === '..' || ary[0] === '..')) {
+                    //End of the line. Keep at least one non-dot
+                    //path segment at the front so it can be mapped
+                    //correctly to disk. Otherwise, there is likely
+                    //no path mapping for a path starting with '..'.
+                    //This can still fail, but catches the most reasonable
+                    //uses of ..
+                    break;
+                } else if (i > 0) {
+                    ary.splice(i - 1, 2);
+                    i -= 2;
+                }
+            }
+        }
+    }
+
+    function normalize(name, baseName) {
+        var baseParts;
+
+        //Adjust any relative paths.
+        if (name && name.charAt(0) === '.') {
+            //If have a base name, try to normalize against it,
+            //otherwise, assume it is a top-level require that will
+            //be relative to baseUrl in the end.
+            if (baseName) {
+                baseParts = baseName.split('/');
+                baseParts = baseParts.slice(0, baseParts.length - 1);
+                baseParts = baseParts.concat(name.split('/'));
+                trimDots(baseParts);
+                name = baseParts.join('/');
+            }
+        }
+
+        return name;
+    }
+
+    /**
+     * Create the normalize() function passed to a loader plugin's
+     * normalize method.
+     */
+    function makeNormalize(relName) {
+        return function (name) {
+            return normalize(name, relName);
+        };
+    }
+
+    function makeLoad(id) {
+        function load(value) {
+            loaderCache[id] = value;
+        }
+
+        load.fromText = function (id, text) {
+            //This one is difficult because the text can/probably uses
+            //define, and any relative paths and requires should be relative
+            //to that id was it would be found on disk. But this would require
+            //bootstrapping a module/require fairly deeply from node core.
+            //Not sure how best to go about that yet.
+            throw new Error('amdefine does not implement load.fromText');
+        };
+
+        return load;
+    }
+
+    makeRequire = function (systemRequire, exports, module, relId) {
+        function amdRequire(deps, callback) {
+            if (typeof deps === 'string') {
+                //Synchronous, single module require('')
+                return stringRequire(systemRequire, exports, module, deps, relId);
+            } else {
+                //Array of dependencies with a callback.
+
+                //Convert the dependencies to modules.
+                deps = deps.map(function (depName) {
+                    return stringRequire(systemRequire, exports, module, depName, relId);
+                });
+
+                //Wait for next tick to call back the require call.
+                process.nextTick(function () {
+                    callback.apply(null, deps);
+                });
+            }
+        }
+
+        amdRequire.toUrl = function (filePath) {
+            if (filePath.indexOf('.') === 0) {
+                return normalize(filePath, path.dirname(module.filename));
+            } else {
+                return filePath;
+            }
+        };
+
+        return amdRequire;
+    };
+
+    //Favor explicit value, passed in if the module wants to support Node 0.4.
+    requireFn = requireFn || function req() {
+        return module.require.apply(module, arguments);
+    };
+
+    function runFactory(id, deps, factory) {
+        var r, e, m, result;
+
+        if (id) {
+            e = loaderCache[id] = {};
+            m = {
+                id: id,
+                uri: __filename,
+                exports: e
+            };
+            r = makeRequire(requireFn, e, m, id);
+        } else {
+            //Only support one define call per file
+            if (alreadyCalled) {
+                throw new Error('amdefine with no module ID cannot be called more than once per file.');
+            }
+            alreadyCalled = true;
+
+            //Use the real variables from node
+            //Use module.exports for exports, since
+            //the exports in here is amdefine exports.
+            e = module.exports;
+            m = module;
+            r = makeRequire(requireFn, e, m, module.id);
+        }
+
+        //If there are dependencies, they are strings, so need
+        //to convert them to dependency values.
+        if (deps) {
+            deps = deps.map(function (depName) {
+                return r(depName);
+            });
+        }
+
+        //Call the factory with the right dependencies.
+        if (typeof factory === 'function') {
+            result = factory.apply(m.exports, deps);
+        } else {
+            result = factory;
+        }
+
+        if (result !== undefined) {
+            m.exports = result;
+            if (id) {
+                loaderCache[id] = m.exports;
+            }
+        }
+    }
+
+    stringRequire = function (systemRequire, exports, module, id, relId) {
+        //Split the ID by a ! so that
+        var index = id.indexOf('!'),
+            originalId = id,
+            prefix, plugin;
+
+        if (index === -1) {
+            id = normalize(id, relId);
+
+            //Straight module lookup. If it is one of the special dependencies,
+            //deal with it, otherwise, delegate to node.
+            if (id === 'require') {
+                return makeRequire(systemRequire, exports, module, relId);
+            } else if (id === 'exports') {
+                return exports;
+            } else if (id === 'module') {
+                return module;
+            } else if (loaderCache.hasOwnProperty(id)) {
+                return loaderCache[id];
+            } else if (defineCache[id]) {
+                runFactory.apply(null, defineCache[id]);
+                return loaderCache[id];
+            } else {
+                if(systemRequire) {
+                    return systemRequire(originalId);
+                } else {
+                    throw new Error('No module with ID: ' + id);
+                }
+            }
+        } else {
+            //There is a plugin in play.
+            prefix = id.substring(0, index);
+            id = id.substring(index + 1, id.length);
+
+            plugin = stringRequire(systemRequire, exports, module, prefix, relId);
+
+            if (plugin.normalize) {
+                id = plugin.normalize(id, makeNormalize(relId));
+            } else {
+                //Normalize the ID normally.
+                id = normalize(id, relId);
+            }
+
+            if (loaderCache[id]) {
+                return loaderCache[id];
+            } else {
+                plugin.load(id, makeRequire(systemRequire, exports, module, relId), makeLoad(id), {});
+
+                return loaderCache[id];
+            }
+        }
+    };
+
+    //Create a define function specific to the module asking for amdefine.
+    function define(id, deps, factory) {
+        if (Array.isArray(id)) {
+            factory = deps;
+            deps = id;
+            id = undefined;
+        } else if (typeof id !== 'string') {
+            factory = id;
+            id = deps = undefined;
+        }
+
+        if (deps && !Array.isArray(deps)) {
+            factory = deps;
+            deps = undefined;
+        }
+
+        if (!deps) {
+            deps = ['require', 'exports', 'module'];
+        }
+
+        //Set up properties for this module. If an ID, then use
+        //internal cache. If no ID, then use the external variables
+        //for this node module.
+        if (id) {
+            //Put the module in deep freeze until there is a
+            //require call for it.
+            defineCache[id] = [id, deps, factory];
+        } else {
+            runFactory(id, deps, factory);
+        }
+    }
+
+    //define.require, which has access to all the values in the
+    //cache. Useful for AMD modules that all have IDs in the file,
+    //but need to finally export a value to node based on one of those
+    //IDs.
+    define.require = function (id) {
+        if (loaderCache[id]) {
+            return loaderCache[id];
+        }
+
+        if (defineCache[id]) {
+            runFactory.apply(null, defineCache[id]);
+            return loaderCache[id];
+        }
+    };
+
+    define.amd = {};
+
+    return define;
+}
+
+module.exports = amdefine;
+
+}).call(this,require('_process'),"/node_modules\\browserify\\node_modules\\browser-pack\\node_modules\\combine-source-map\\node_modules\\inline-source-map\\node_modules\\source-map\\node_modules\\amdefine\\amdefine.js")
+},{"_process":160,"path":159}],26:[function(require,module,exports){
+arguments[4][13][0].apply(exports,arguments)
+},{"./source-map/source-map-consumer":32,"./source-map/source-map-generator":33,"./source-map/source-node":34,"dup":13}],27:[function(require,module,exports){
+arguments[4][14][0].apply(exports,arguments)
+},{"./util":35,"amdefine":36,"dup":14}],28:[function(require,module,exports){
+arguments[4][15][0].apply(exports,arguments)
+},{"./base64":29,"amdefine":36,"dup":15}],29:[function(require,module,exports){
+arguments[4][16][0].apply(exports,arguments)
+},{"amdefine":36,"dup":16}],30:[function(require,module,exports){
+/* -*- Mode: js; js-indent-level: 2; -*- */
+/*
+ * Copyright 2011 Mozilla Foundation and contributors
+ * Licensed under the New BSD license. See LICENSE or:
+ * http://opensource.org/licenses/BSD-3-Clause
+ */
+if (typeof define !== 'function') {
+    var define = require('amdefine')(module, require);
+}
+define(function (require, exports, module) {
+
+  /**
+   * Recursive implementation of binary search.
+   *
+   * @param aLow Indices here and lower do not contain the needle.
+   * @param aHigh Indices here and higher do not contain the needle.
+   * @param aNeedle The element being searched for.
+   * @param aHaystack The non-empty array being searched.
+   * @param aCompare Function which takes two elements and returns -1, 0, or 1.
+   */
+  function recursiveSearch(aLow, aHigh, aNeedle, aHaystack, aCompare) {
+    // This function terminates when one of the following is true:
+    //
+    //   1. We find the exact element we are looking for.
+    //
+    //   2. We did not find the exact element, but we can return the index of
+    //      the next closest element that is less than that element.
+    //
+    //   3. We did not find the exact element, and there is no next-closest
+    //      element which is less than the one we are searching for, so we
+    //      return -1.
+    var mid = Math.floor((aHigh - aLow) / 2) + aLow;
+    var cmp = aCompare(aNeedle, aHaystack[mid], true);
+    if (cmp === 0) {
+      // Found the element we are looking for.
+      return mid;
+    }
+    else if (cmp > 0) {
+      // aHaystack[mid] is greater than our needle.
+      if (aHigh - mid > 1) {
+        // The element is in the upper half.
+        return recursiveSearch(mid, aHigh, aNeedle, aHaystack, aCompare);
+      }
+      // We did not find an exact match, return the next closest one
+      // (termination case 2).
+      return mid;
+    }
+    else {
+      // aHaystack[mid] is less than our needle.
+      if (mid - aLow > 1) {
+        // The element is in the lower half.
+        return recursiveSearch(aLow, mid, aNeedle, aHaystack, aCompare);
+      }
+      // The exact needle element was not found in this haystack. Determine if
+      // we are in termination case (2) or (3) and return the appropriate thing.
+      return aLow < 0 ? -1 : aLow;
+    }
+  }
+
+  /**
+   * This is an implementation of binary search which will always try and return
+   * the index of next lowest value checked if there is no exact hit. This is
+   * because mappings between original and generated line/col pairs are single
+   * points, and there is an implicit region between each of them, so a miss
+   * just means that you aren't on the very start of a region.
+   *
+   * @param aNeedle The element you are looking for.
+   * @param aHaystack The array that is being searched.
+   * @param aCompare A function which takes the needle and an element in the
+   *     array and returns -1, 0, or 1 depending on whether the needle is less
+   *     than, equal to, or greater than the element, respectively.
+   */
+  exports.search = function search(aNeedle, aHaystack, aCompare) {
+    if (aHaystack.length === 0) {
+      return -1;
+    }
+    return recursiveSearch(-1, aHaystack.length, aNeedle, aHaystack, aCompare)
+  };
+
+});
+
+},{"amdefine":36}],31:[function(require,module,exports){
+arguments[4][20][0].apply(exports,arguments)
+},{"./util":35,"amdefine":36,"dup":20}],32:[function(require,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -3108,7 +5656,7 @@ define(function (require, exports, module) {
 
 });
 
-},{"./array-set":14,"./base64-vlq":15,"./binary-search":17,"./util":22,"amdefine":23}],20:[function(require,module,exports){
+},{"./array-set":27,"./base64-vlq":28,"./binary-search":30,"./util":35,"amdefine":36}],33:[function(require,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -3510,744 +6058,11 @@ define(function (require, exports, module) {
 
 });
 
-},{"./array-set":14,"./base64-vlq":15,"./mapping-list":18,"./util":22,"amdefine":23}],21:[function(require,module,exports){
-/* -*- Mode: js; js-indent-level: 2; -*- */
-/*
- * Copyright 2011 Mozilla Foundation and contributors
- * Licensed under the New BSD license. See LICENSE or:
- * http://opensource.org/licenses/BSD-3-Clause
- */
-if (typeof define !== 'function') {
-    var define = require('amdefine')(module, require);
-}
-define(function (require, exports, module) {
-
-  var SourceMapGenerator = require('./source-map-generator').SourceMapGenerator;
-  var util = require('./util');
-
-  // Matches a Windows-style `\r\n` newline or a `\n` newline used by all other
-  // operating systems these days (capturing the result).
-  var REGEX_NEWLINE = /(\r?\n)/;
-
-  // Newline character code for charCodeAt() comparisons
-  var NEWLINE_CODE = 10;
-
-  // Private symbol for identifying `SourceNode`s when multiple versions of
-  // the source-map library are loaded. This MUST NOT CHANGE across
-  // versions!
-  var isSourceNode = "$$$isSourceNode$$$";
-
-  /**
-   * SourceNodes provide a way to abstract over interpolating/concatenating
-   * snippets of generated JavaScript source code while maintaining the line and
-   * column information associated with the original source code.
-   *
-   * @param aLine The original line number.
-   * @param aColumn The original column number.
-   * @param aSource The original source's filename.
-   * @param aChunks Optional. An array of strings which are snippets of
-   *        generated JS, or other SourceNodes.
-   * @param aName The original identifier.
-   */
-  function SourceNode(aLine, aColumn, aSource, aChunks, aName) {
-    this.children = [];
-    this.sourceContents = {};
-    this.line = aLine == null ? null : aLine;
-    this.column = aColumn == null ? null : aColumn;
-    this.source = aSource == null ? null : aSource;
-    this.name = aName == null ? null : aName;
-    this[isSourceNode] = true;
-    if (aChunks != null) this.add(aChunks);
-  }
-
-  /**
-   * Creates a SourceNode from generated code and a SourceMapConsumer.
-   *
-   * @param aGeneratedCode The generated code
-   * @param aSourceMapConsumer The SourceMap for the generated code
-   * @param aRelativePath Optional. The path that relative sources in the
-   *        SourceMapConsumer should be relative to.
-   */
-  SourceNode.fromStringWithSourceMap =
-    function SourceNode_fromStringWithSourceMap(aGeneratedCode, aSourceMapConsumer, aRelativePath) {
-      // The SourceNode we want to fill with the generated code
-      // and the SourceMap
-      var node = new SourceNode();
-
-      // All even indices of this array are one line of the generated code,
-      // while all odd indices are the newlines between two adjacent lines
-      // (since `REGEX_NEWLINE` captures its match).
-      // Processed fragments are removed from this array, by calling `shiftNextLine`.
-      var remainingLines = aGeneratedCode.split(REGEX_NEWLINE);
-      var shiftNextLine = function() {
-        var lineContents = remainingLines.shift();
-        // The last line of a file might not have a newline.
-        var newLine = remainingLines.shift() || "";
-        return lineContents + newLine;
-      };
-
-      // We need to remember the position of "remainingLines"
-      var lastGeneratedLine = 1, lastGeneratedColumn = 0;
-
-      // The generate SourceNodes we need a code range.
-      // To extract it current and last mapping is used.
-      // Here we store the last mapping.
-      var lastMapping = null;
-
-      aSourceMapConsumer.eachMapping(function (mapping) {
-        if (lastMapping !== null) {
-          // We add the code from "lastMapping" to "mapping":
-          // First check if there is a new line in between.
-          if (lastGeneratedLine < mapping.generatedLine) {
-            var code = "";
-            // Associate first line with "lastMapping"
-            addMappingWithCode(lastMapping, shiftNextLine());
-            lastGeneratedLine++;
-            lastGeneratedColumn = 0;
-            // The remaining code is added without mapping
-          } else {
-            // There is no new line in between.
-            // Associate the code between "lastGeneratedColumn" and
-            // "mapping.generatedColumn" with "lastMapping"
-            var nextLine = remainingLines[0];
-            var code = nextLine.substr(0, mapping.generatedColumn -
-                                          lastGeneratedColumn);
-            remainingLines[0] = nextLine.substr(mapping.generatedColumn -
-                                                lastGeneratedColumn);
-            lastGeneratedColumn = mapping.generatedColumn;
-            addMappingWithCode(lastMapping, code);
-            // No more remaining code, continue
-            lastMapping = mapping;
-            return;
-          }
-        }
-        // We add the generated code until the first mapping
-        // to the SourceNode without any mapping.
-        // Each line is added as separate string.
-        while (lastGeneratedLine < mapping.generatedLine) {
-          node.add(shiftNextLine());
-          lastGeneratedLine++;
-        }
-        if (lastGeneratedColumn < mapping.generatedColumn) {
-          var nextLine = remainingLines[0];
-          node.add(nextLine.substr(0, mapping.generatedColumn));
-          remainingLines[0] = nextLine.substr(mapping.generatedColumn);
-          lastGeneratedColumn = mapping.generatedColumn;
-        }
-        lastMapping = mapping;
-      }, this);
-      // We have processed all mappings.
-      if (remainingLines.length > 0) {
-        if (lastMapping) {
-          // Associate the remaining code in the current line with "lastMapping"
-          addMappingWithCode(lastMapping, shiftNextLine());
-        }
-        // and add the remaining lines without any mapping
-        node.add(remainingLines.join(""));
-      }
-
-      // Copy sourcesContent into SourceNode
-      aSourceMapConsumer.sources.forEach(function (sourceFile) {
-        var content = aSourceMapConsumer.sourceContentFor(sourceFile);
-        if (content != null) {
-          if (aRelativePath != null) {
-            sourceFile = util.join(aRelativePath, sourceFile);
-          }
-          node.setSourceContent(sourceFile, content);
-        }
-      });
-
-      return node;
-
-      function addMappingWithCode(mapping, code) {
-        if (mapping === null || mapping.source === undefined) {
-          node.add(code);
-        } else {
-          var source = aRelativePath
-            ? util.join(aRelativePath, mapping.source)
-            : mapping.source;
-          node.add(new SourceNode(mapping.originalLine,
-                                  mapping.originalColumn,
-                                  source,
-                                  code,
-                                  mapping.name));
-        }
-      }
-    };
-
-  /**
-   * Add a chunk of generated JS to this source node.
-   *
-   * @param aChunk A string snippet of generated JS code, another instance of
-   *        SourceNode, or an array where each member is one of those things.
-   */
-  SourceNode.prototype.add = function SourceNode_add(aChunk) {
-    if (Array.isArray(aChunk)) {
-      aChunk.forEach(function (chunk) {
-        this.add(chunk);
-      }, this);
-    }
-    else if (aChunk[isSourceNode] || typeof aChunk === "string") {
-      if (aChunk) {
-        this.children.push(aChunk);
-      }
-    }
-    else {
-      throw new TypeError(
-        "Expected a SourceNode, string, or an array of SourceNodes and strings. Got " + aChunk
-      );
-    }
-    return this;
-  };
-
-  /**
-   * Add a chunk of generated JS to the beginning of this source node.
-   *
-   * @param aChunk A string snippet of generated JS code, another instance of
-   *        SourceNode, or an array where each member is one of those things.
-   */
-  SourceNode.prototype.prepend = function SourceNode_prepend(aChunk) {
-    if (Array.isArray(aChunk)) {
-      for (var i = aChunk.length-1; i >= 0; i--) {
-        this.prepend(aChunk[i]);
-      }
-    }
-    else if (aChunk[isSourceNode] || typeof aChunk === "string") {
-      this.children.unshift(aChunk);
-    }
-    else {
-      throw new TypeError(
-        "Expected a SourceNode, string, or an array of SourceNodes and strings. Got " + aChunk
-      );
-    }
-    return this;
-  };
-
-  /**
-   * Walk over the tree of JS snippets in this node and its children. The
-   * walking function is called once for each snippet of JS and is passed that
-   * snippet and the its original associated source's line/column location.
-   *
-   * @param aFn The traversal function.
-   */
-  SourceNode.prototype.walk = function SourceNode_walk(aFn) {
-    var chunk;
-    for (var i = 0, len = this.children.length; i < len; i++) {
-      chunk = this.children[i];
-      if (chunk[isSourceNode]) {
-        chunk.walk(aFn);
-      }
-      else {
-        if (chunk !== '') {
-          aFn(chunk, { source: this.source,
-                       line: this.line,
-                       column: this.column,
-                       name: this.name });
-        }
-      }
-    }
-  };
-
-  /**
-   * Like `String.prototype.join` except for SourceNodes. Inserts `aStr` between
-   * each of `this.children`.
-   *
-   * @param aSep The separator.
-   */
-  SourceNode.prototype.join = function SourceNode_join(aSep) {
-    var newChildren;
-    var i;
-    var len = this.children.length;
-    if (len > 0) {
-      newChildren = [];
-      for (i = 0; i < len-1; i++) {
-        newChildren.push(this.children[i]);
-        newChildren.push(aSep);
-      }
-      newChildren.push(this.children[i]);
-      this.children = newChildren;
-    }
-    return this;
-  };
-
-  /**
-   * Call String.prototype.replace on the very right-most source snippet. Useful
-   * for trimming whitespace from the end of a source node, etc.
-   *
-   * @param aPattern The pattern to replace.
-   * @param aReplacement The thing to replace the pattern with.
-   */
-  SourceNode.prototype.replaceRight = function SourceNode_replaceRight(aPattern, aReplacement) {
-    var lastChild = this.children[this.children.length - 1];
-    if (lastChild[isSourceNode]) {
-      lastChild.replaceRight(aPattern, aReplacement);
-    }
-    else if (typeof lastChild === 'string') {
-      this.children[this.children.length - 1] = lastChild.replace(aPattern, aReplacement);
-    }
-    else {
-      this.children.push(''.replace(aPattern, aReplacement));
-    }
-    return this;
-  };
-
-  /**
-   * Set the source content for a source file. This will be added to the SourceMapGenerator
-   * in the sourcesContent field.
-   *
-   * @param aSourceFile The filename of the source file
-   * @param aSourceContent The content of the source file
-   */
-  SourceNode.prototype.setSourceContent =
-    function SourceNode_setSourceContent(aSourceFile, aSourceContent) {
-      this.sourceContents[util.toSetString(aSourceFile)] = aSourceContent;
-    };
-
-  /**
-   * Walk over the tree of SourceNodes. The walking function is called for each
-   * source file content and is passed the filename and source content.
-   *
-   * @param aFn The traversal function.
-   */
-  SourceNode.prototype.walkSourceContents =
-    function SourceNode_walkSourceContents(aFn) {
-      for (var i = 0, len = this.children.length; i < len; i++) {
-        if (this.children[i][isSourceNode]) {
-          this.children[i].walkSourceContents(aFn);
-        }
-      }
-
-      var sources = Object.keys(this.sourceContents);
-      for (var i = 0, len = sources.length; i < len; i++) {
-        aFn(util.fromSetString(sources[i]), this.sourceContents[sources[i]]);
-      }
-    };
-
-  /**
-   * Return the string representation of this source node. Walks over the tree
-   * and concatenates all the various snippets together to one string.
-   */
-  SourceNode.prototype.toString = function SourceNode_toString() {
-    var str = "";
-    this.walk(function (chunk) {
-      str += chunk;
-    });
-    return str;
-  };
-
-  /**
-   * Returns the string representation of this source node along with a source
-   * map.
-   */
-  SourceNode.prototype.toStringWithSourceMap = function SourceNode_toStringWithSourceMap(aArgs) {
-    var generated = {
-      code: "",
-      line: 1,
-      column: 0
-    };
-    var map = new SourceMapGenerator(aArgs);
-    var sourceMappingActive = false;
-    var lastOriginalSource = null;
-    var lastOriginalLine = null;
-    var lastOriginalColumn = null;
-    var lastOriginalName = null;
-    this.walk(function (chunk, original) {
-      generated.code += chunk;
-      if (original.source !== null
-          && original.line !== null
-          && original.column !== null) {
-        if(lastOriginalSource !== original.source
-           || lastOriginalLine !== original.line
-           || lastOriginalColumn !== original.column
-           || lastOriginalName !== original.name) {
-          map.addMapping({
-            source: original.source,
-            original: {
-              line: original.line,
-              column: original.column
-            },
-            generated: {
-              line: generated.line,
-              column: generated.column
-            },
-            name: original.name
-          });
-        }
-        lastOriginalSource = original.source;
-        lastOriginalLine = original.line;
-        lastOriginalColumn = original.column;
-        lastOriginalName = original.name;
-        sourceMappingActive = true;
-      } else if (sourceMappingActive) {
-        map.addMapping({
-          generated: {
-            line: generated.line,
-            column: generated.column
-          }
-        });
-        lastOriginalSource = null;
-        sourceMappingActive = false;
-      }
-      for (var idx = 0, length = chunk.length; idx < length; idx++) {
-        if (chunk.charCodeAt(idx) === NEWLINE_CODE) {
-          generated.line++;
-          generated.column = 0;
-          // Mappings end at eol
-          if (idx + 1 === length) {
-            lastOriginalSource = null;
-            sourceMappingActive = false;
-          } else if (sourceMappingActive) {
-            map.addMapping({
-              source: original.source,
-              original: {
-                line: original.line,
-                column: original.column
-              },
-              generated: {
-                line: generated.line,
-                column: generated.column
-              },
-              name: original.name
-            });
-          }
-        } else {
-          generated.column++;
-        }
-      }
-    });
-    this.walkSourceContents(function (sourceFile, sourceContent) {
-      map.setSourceContent(sourceFile, sourceContent);
-    });
-
-    return { code: generated.code, map: map };
-  };
-
-  exports.SourceNode = SourceNode;
-
-});
-
-},{"./source-map-generator":20,"./util":22,"amdefine":23}],22:[function(require,module,exports){
-/* -*- Mode: js; js-indent-level: 2; -*- */
-/*
- * Copyright 2011 Mozilla Foundation and contributors
- * Licensed under the New BSD license. See LICENSE or:
- * http://opensource.org/licenses/BSD-3-Clause
- */
-if (typeof define !== 'function') {
-    var define = require('amdefine')(module, require);
-}
-define(function (require, exports, module) {
-
-  /**
-   * This is a helper function for getting values from parameter/options
-   * objects.
-   *
-   * @param args The object we are extracting values from
-   * @param name The name of the property we are getting.
-   * @param defaultValue An optional value to return if the property is missing
-   * from the object. If this is not specified and the property is missing, an
-   * error will be thrown.
-   */
-  function getArg(aArgs, aName, aDefaultValue) {
-    if (aName in aArgs) {
-      return aArgs[aName];
-    } else if (arguments.length === 3) {
-      return aDefaultValue;
-    } else {
-      throw new Error('"' + aName + '" is a required argument.');
-    }
-  }
-  exports.getArg = getArg;
-
-  var urlRegexp = /^(?:([\w+\-.]+):)?\/\/(?:(\w+:\w+)@)?([\w.]*)(?::(\d+))?(\S*)$/;
-  var dataUrlRegexp = /^data:.+\,.+$/;
-
-  function urlParse(aUrl) {
-    var match = aUrl.match(urlRegexp);
-    if (!match) {
-      return null;
-    }
-    return {
-      scheme: match[1],
-      auth: match[2],
-      host: match[3],
-      port: match[4],
-      path: match[5]
-    };
-  }
-  exports.urlParse = urlParse;
-
-  function urlGenerate(aParsedUrl) {
-    var url = '';
-    if (aParsedUrl.scheme) {
-      url += aParsedUrl.scheme + ':';
-    }
-    url += '//';
-    if (aParsedUrl.auth) {
-      url += aParsedUrl.auth + '@';
-    }
-    if (aParsedUrl.host) {
-      url += aParsedUrl.host;
-    }
-    if (aParsedUrl.port) {
-      url += ":" + aParsedUrl.port
-    }
-    if (aParsedUrl.path) {
-      url += aParsedUrl.path;
-    }
-    return url;
-  }
-  exports.urlGenerate = urlGenerate;
-
-  /**
-   * Normalizes a path, or the path portion of a URL:
-   *
-   * - Replaces consequtive slashes with one slash.
-   * - Removes unnecessary '.' parts.
-   * - Removes unnecessary '<dir>/..' parts.
-   *
-   * Based on code in the Node.js 'path' core module.
-   *
-   * @param aPath The path or url to normalize.
-   */
-  function normalize(aPath) {
-    var path = aPath;
-    var url = urlParse(aPath);
-    if (url) {
-      if (!url.path) {
-        return aPath;
-      }
-      path = url.path;
-    }
-    var isAbsolute = (path.charAt(0) === '/');
-
-    var parts = path.split(/\/+/);
-    for (var part, up = 0, i = parts.length - 1; i >= 0; i--) {
-      part = parts[i];
-      if (part === '.') {
-        parts.splice(i, 1);
-      } else if (part === '..') {
-        up++;
-      } else if (up > 0) {
-        if (part === '') {
-          // The first part is blank if the path is absolute. Trying to go
-          // above the root is a no-op. Therefore we can remove all '..' parts
-          // directly after the root.
-          parts.splice(i + 1, up);
-          up = 0;
-        } else {
-          parts.splice(i, 2);
-          up--;
-        }
-      }
-    }
-    path = parts.join('/');
-
-    if (path === '') {
-      path = isAbsolute ? '/' : '.';
-    }
-
-    if (url) {
-      url.path = path;
-      return urlGenerate(url);
-    }
-    return path;
-  }
-  exports.normalize = normalize;
-
-  /**
-   * Joins two paths/URLs.
-   *
-   * @param aRoot The root path or URL.
-   * @param aPath The path or URL to be joined with the root.
-   *
-   * - If aPath is a URL or a data URI, aPath is returned, unless aPath is a
-   *   scheme-relative URL: Then the scheme of aRoot, if any, is prepended
-   *   first.
-   * - Otherwise aPath is a path. If aRoot is a URL, then its path portion
-   *   is updated with the result and aRoot is returned. Otherwise the result
-   *   is returned.
-   *   - If aPath is absolute, the result is aPath.
-   *   - Otherwise the two paths are joined with a slash.
-   * - Joining for example 'http://' and 'www.example.com' is also supported.
-   */
-  function join(aRoot, aPath) {
-    if (aRoot === "") {
-      aRoot = ".";
-    }
-    if (aPath === "") {
-      aPath = ".";
-    }
-    var aPathUrl = urlParse(aPath);
-    var aRootUrl = urlParse(aRoot);
-    if (aRootUrl) {
-      aRoot = aRootUrl.path || '/';
-    }
-
-    // `join(foo, '//www.example.org')`
-    if (aPathUrl && !aPathUrl.scheme) {
-      if (aRootUrl) {
-        aPathUrl.scheme = aRootUrl.scheme;
-      }
-      return urlGenerate(aPathUrl);
-    }
-
-    if (aPathUrl || aPath.match(dataUrlRegexp)) {
-      return aPath;
-    }
-
-    // `join('http://', 'www.example.com')`
-    if (aRootUrl && !aRootUrl.host && !aRootUrl.path) {
-      aRootUrl.host = aPath;
-      return urlGenerate(aRootUrl);
-    }
-
-    var joined = aPath.charAt(0) === '/'
-      ? aPath
-      : normalize(aRoot.replace(/\/+$/, '') + '/' + aPath);
-
-    if (aRootUrl) {
-      aRootUrl.path = joined;
-      return urlGenerate(aRootUrl);
-    }
-    return joined;
-  }
-  exports.join = join;
-
-  /**
-   * Make a path relative to a URL or another path.
-   *
-   * @param aRoot The root path or URL.
-   * @param aPath The path or URL to be made relative to aRoot.
-   */
-  function relative(aRoot, aPath) {
-    if (aRoot === "") {
-      aRoot = ".";
-    }
-
-    aRoot = aRoot.replace(/\/$/, '');
-
-    // XXX: It is possible to remove this block, and the tests still pass!
-    var url = urlParse(aRoot);
-    if (aPath.charAt(0) == "/" && url && url.path == "/") {
-      return aPath.slice(1);
-    }
-
-    return aPath.indexOf(aRoot + '/') === 0
-      ? aPath.substr(aRoot.length + 1)
-      : aPath;
-  }
-  exports.relative = relative;
-
-  /**
-   * Because behavior goes wacky when you set `__proto__` on objects, we
-   * have to prefix all the strings in our set with an arbitrary character.
-   *
-   * See https://github.com/mozilla/source-map/pull/31 and
-   * https://github.com/mozilla/source-map/issues/30
-   *
-   * @param String aStr
-   */
-  function toSetString(aStr) {
-    return '$' + aStr;
-  }
-  exports.toSetString = toSetString;
-
-  function fromSetString(aStr) {
-    return aStr.substr(1);
-  }
-  exports.fromSetString = fromSetString;
-
-  function strcmp(aStr1, aStr2) {
-    var s1 = aStr1 || "";
-    var s2 = aStr2 || "";
-    return (s1 > s2) - (s1 < s2);
-  }
-
-  /**
-   * Comparator between two mappings where the original positions are compared.
-   *
-   * Optionally pass in `true` as `onlyCompareGenerated` to consider two
-   * mappings with the same original source/line/column, but different generated
-   * line and column the same. Useful when searching for a mapping with a
-   * stubbed out mapping.
-   */
-  function compareByOriginalPositions(mappingA, mappingB, onlyCompareOriginal) {
-    var cmp;
-
-    cmp = strcmp(mappingA.source, mappingB.source);
-    if (cmp) {
-      return cmp;
-    }
-
-    cmp = mappingA.originalLine - mappingB.originalLine;
-    if (cmp) {
-      return cmp;
-    }
-
-    cmp = mappingA.originalColumn - mappingB.originalColumn;
-    if (cmp || onlyCompareOriginal) {
-      return cmp;
-    }
-
-    cmp = strcmp(mappingA.name, mappingB.name);
-    if (cmp) {
-      return cmp;
-    }
-
-    cmp = mappingA.generatedLine - mappingB.generatedLine;
-    if (cmp) {
-      return cmp;
-    }
-
-    return mappingA.generatedColumn - mappingB.generatedColumn;
-  };
-  exports.compareByOriginalPositions = compareByOriginalPositions;
-
-  /**
-   * Comparator between two mappings where the generated positions are
-   * compared.
-   *
-   * Optionally pass in `true` as `onlyCompareGenerated` to consider two
-   * mappings with the same generated line and column, but different
-   * source/name/original line and column the same. Useful when searching for a
-   * mapping with a stubbed out mapping.
-   */
-  function compareByGeneratedPositions(mappingA, mappingB, onlyCompareGenerated) {
-    var cmp;
-
-    cmp = mappingA.generatedLine - mappingB.generatedLine;
-    if (cmp) {
-      return cmp;
-    }
-
-    cmp = mappingA.generatedColumn - mappingB.generatedColumn;
-    if (cmp || onlyCompareGenerated) {
-      return cmp;
-    }
-
-    cmp = strcmp(mappingA.source, mappingB.source);
-    if (cmp) {
-      return cmp;
-    }
-
-    cmp = mappingA.originalLine - mappingB.originalLine;
-    if (cmp) {
-      return cmp;
-    }
-
-    cmp = mappingA.originalColumn - mappingB.originalColumn;
-    if (cmp) {
-      return cmp;
-    }
-
-    return strcmp(mappingA.name, mappingB.name);
-  };
-  exports.compareByGeneratedPositions = compareByGeneratedPositions;
-
-});
-
-},{"amdefine":23}],23:[function(require,module,exports){
+},{"./array-set":27,"./base64-vlq":28,"./mapping-list":31,"./util":35,"amdefine":36}],34:[function(require,module,exports){
+arguments[4][23][0].apply(exports,arguments)
+},{"./source-map-generator":33,"./util":35,"amdefine":36,"dup":23}],35:[function(require,module,exports){
+arguments[4][24][0].apply(exports,arguments)
+},{"amdefine":36,"dup":24}],36:[function(require,module,exports){
 (function (process,__filename){
 /** vim: et:ts=4:sw=4:sts=4
  * @license amdefine 0.1.0 Copyright (c) 2011, The Dojo Foundation All Rights Reserved.
@@ -4550,7 +6365,7 @@ function amdefine(module, requireFn) {
 module.exports = amdefine;
 
 }).call(this,require('_process'),"/node_modules\\browserify\\node_modules\\browser-pack\\node_modules\\combine-source-map\\node_modules\\source-map\\node_modules\\amdefine\\amdefine.js")
-},{"_process":125,"path":124}],24:[function(require,module,exports){
+},{"_process":160,"path":159}],37:[function(require,module,exports){
 var Transform = require('readable-stream/transform')
   , inherits  = require('util').inherits
   , xtend     = require('xtend')
@@ -4630,9 +6445,9 @@ module.exports.obj = through2(function (options, transform, flush) {
   return t2
 })
 
-},{"readable-stream/transform":135,"util":190,"xtend":191}],25:[function(require,module,exports){
+},{"readable-stream/transform":170,"util":225,"xtend":226}],38:[function(require,module,exports){
 arguments[4][3][0].apply(exports,arguments)
-},{"dup":3}],26:[function(require,module,exports){
+},{"dup":3}],39:[function(require,module,exports){
 (function (process,__dirname){
 // builtin
 var fs = require('fs');
@@ -4807,6 +6622,31 @@ function build_resolve_opts(opts, base) {
         info.main = replace_main || info.main;
         return info;
     };
+    
+    var pathFilter = opts.pathFilter;
+    opts.pathFilter = function(info, path, relativePath) {
+    	if(relativePath[0] != '.') {
+    		relativePath = './' + relativePath;
+    	}
+    	var mappedPath;
+    	if(pathFilter) {
+    		mappedPath = pathFilter.apply(this, arguments);
+    	}
+    	if(mappedPath) {
+    		return mappedPath;
+    	}
+    	if(!info.browser) {
+    		return;
+    	}
+    	
+    	if(typeof info.browser) {
+    		mappedPath = info.browser[relativePath];
+    		if(!mappedPath && (relativePath.lastIndexOf(".js") === relativePath.length-3) ) {
+    			mappedPath = info.browser[relativePath+".js"];
+    		}
+    		return mappedPath;
+    	}
+    };
 
     return opts;
 }
@@ -4925,20 +6765,21 @@ module.exports = resolve;
 
 
 }).call(this,require('_process'),"/node_modules\\browserify\\node_modules\\browser-resolve")
-},{"_process":125,"fs":3,"path":124,"resolve":27}],27:[function(require,module,exports){
+},{"_process":160,"fs":3,"path":159,"resolve":40}],40:[function(require,module,exports){
 var core = require('./lib/core');
 exports = module.exports = require('./lib/async');
 exports.core = core;
 exports.isCore = function (x) { return core[x] };
 exports.sync = require('./lib/sync');
 
-},{"./lib/async":28,"./lib/core":31,"./lib/sync":33}],28:[function(require,module,exports){
+},{"./lib/async":41,"./lib/core":44,"./lib/sync":46}],41:[function(require,module,exports){
 (function (process){
 var core = require('./core');
 var fs = require('fs');
 var path = require('path');
 var caller = require('./caller.js');
 var nodeModulesPaths = require('./node-modules-paths.js');
+var splitRe = process.platform === 'win32' ? /[\/\\]/ : /\//;
 
 module.exports = function resolve (x, opts, cb) {
     if (typeof opts === 'function') {
@@ -4969,15 +6810,10 @@ module.exports = function resolve (x, opts, cb) {
     if (/^(?:\.\.?(?:\/|$)|\/|([A-Za-z]:)?[\\\/])/.test(x)) {
         var res = path.resolve(y, x);
         if (x === '..') res += '/';
-        loadAsFile(res, function (err, m, pkg) {
-            if (err) cb(err)
-            else if (m) cb(null, m, pkg)
-            else loadAsDirectory(path.resolve(y, x), function (err, d, pkg) {
-                if (err) cb(err)
-                else if (d) cb(null, d, pkg)
-                else cb(new Error("Cannot find module '" + x + "' from '" + y + "'"))
-            })
-        });
+        if (/\/$/.test(x) && res === y) {
+            loadAsDirectory(res, opts.package, onfile);
+        }
+        else loadAsFile(res, opts.package, onfile);
     }
     else loadNodeModules(x, y, function (err, n, pkg) {
         if (err) cb(err)
@@ -4986,22 +6822,80 @@ module.exports = function resolve (x, opts, cb) {
         else cb(new Error("Cannot find module '" + x + "' from '" + y + "'"))
     });
     
+    function onfile (err, m, pkg) {
+        if (err) cb(err)
+        else if (m) cb(null, m, pkg)
+        else loadAsDirectory(res, function (err, d, pkg) {
+            if (err) cb(err)
+            else if (d) cb(null, d, pkg)
+            else cb(new Error("Cannot find module '" + x + "' from '" + y + "'"))
+        })
+    }
+    
     function loadAsFile (x, pkg, cb) {
         if (typeof pkg === 'function') {
             cb = pkg;
-            pkg = opts.package;
+            pkg = undefined;
         }
-      
-        (function load (exts) {
+        
+        var exts = [''].concat(extensions);
+        load(exts, x, pkg)
+		
+		function load (exts, x, pkg) {
             if (exts.length === 0) return cb(null, undefined, pkg);
             var file = x + exts[0];
             
-            isFile(file, function (err, ex) {
+            if (pkg) onpkg(null, pkg)
+            else loadpkg(path.dirname(file), onpkg);
+            
+            function onpkg (err, pkg_, dir) {
+                pkg = pkg_;
+                if (err) return cb(err)
+                if (dir && pkg && opts.pathFilter) {
+                    var rfile = path.relative(dir, file);
+                    var rel = rfile.slice(0, rfile.length - exts[0].length);
+                    var r = opts.pathFilter(pkg, x, rel);
+                    if (r) return load(
+                        [''].concat(extensions.slice()),
+                        path.resolve(dir, r),
+                        pkg
+                    );
+                }
+                isFile(file, onex);
+            }
+            function onex (err, ex) {
                 if (err) cb(err)
-                else if (ex) cb(null, file, pkg)
-                else load(exts.slice(1))
+                else if (!ex) load(exts.slice(1), x, pkg)
+                else cb(null, file, pkg)
+            }
+        }
+    }
+    
+    function loadpkg (dir, cb) {
+        if (dir === '' || dir === '/') return cb(null);
+        if (process.platform === 'win32' && /^\w:[\\\/]*$/.test(dir)) {
+            return cb(null);
+        }
+        if (/[\\\/]node_modules[\\\/]*$/.test(dir)) return cb(null);
+        
+        var pkgfile = path.join(dir, 'package.json');
+        isFile(pkgfile, function (err, ex) {
+            // on err, ex is false
+            if (!ex) return loadpkg(
+                dir.replace(/[\\\/]*[^\\\/]+[\\\/]*/, ''), cb
+            );
+            
+            readFile(pkgfile, function (err, body) {
+                if (err) cb(err);
+                try { var pkg = JSON.parse(body) }
+                catch (err) {}
+                
+                if (pkg && opts.packageFilter) {
+                    pkg = opts.packageFilter(pkg, pkgfile);
+                }
+                cb(null, pkg, dir);
             });
-        })([''].concat(extensions));
+        });
     }
     
     function loadAsDirectory (x, fpkg, cb) {
@@ -5023,7 +6917,7 @@ module.exports = function resolve (x, opts, cb) {
                 catch (err) {}
                 
                 if (opts.packageFilter) {
-                    pkg = opts.packageFilter(pkg, x);
+                    pkg = opts.packageFilter(pkg, pkgfile);
                 }
                 
                 if (pkg.main) {
@@ -5055,21 +6949,26 @@ module.exports = function resolve (x, opts, cb) {
             if (dirs.length === 0) return cb(null, undefined);
             var dir = dirs[0];
             
-            loadAsFile(path.join(dir, '/', x), undefined, function (err, m, pkg) {
+            var file = path.join(dir, '/', x);
+            loadAsFile(file, undefined, onfile);
+            
+            function onfile (err, m, pkg) {
                 if (err) return cb(err);
                 if (m) return cb(null, m, pkg);
-                loadAsDirectory(path.join(dir, '/', x), undefined, function (err, n, pkg) {
-                    if (err) return cb(err);
-                    if (n) return cb(null, n, pkg);
-                    process(dirs.slice(1));
-                });
-            });
+                loadAsDirectory(path.join(dir, '/', x), undefined, ondir);
+            }
+            
+            function ondir (err, n, pkg) {
+                if (err) return cb(err);
+                if (n) return cb(null, n, pkg);
+                process(dirs.slice(1));
+            }
         })(nodeModulesPaths(start, opts));
     }
 };
 
 }).call(this,require('_process'))
-},{"./caller.js":29,"./core":31,"./node-modules-paths.js":32,"_process":125,"fs":3,"path":124}],29:[function(require,module,exports){
+},{"./caller.js":42,"./core":44,"./node-modules-paths.js":45,"_process":160,"fs":3,"path":159}],42:[function(require,module,exports){
 module.exports = function () {
     // see https://code.google.com/p/v8/wiki/JavaScriptStackTraceApi
     var origPrepareStackTrace = Error.prepareStackTrace;
@@ -5079,7 +6978,7 @@ module.exports = function () {
     return stack[2].getFileName();
 };
 
-},{}],30:[function(require,module,exports){
+},{}],43:[function(require,module,exports){
 module.exports=[
     "assert",
     "buffer_ieee754",
@@ -5119,13 +7018,13 @@ module.exports=[
     "zlib"
 ]
 
-},{}],31:[function(require,module,exports){
+},{}],44:[function(require,module,exports){
 module.exports = require('./core.json').reduce(function (acc, x) {
     acc[x] = true;
     return acc;
 }, {});
 
-},{"./core.json":30}],32:[function(require,module,exports){
+},{"./core.json":43}],45:[function(require,module,exports){
 (function (process){
 var path = require('path');
 
@@ -5165,7 +7064,7 @@ module.exports = function (start, opts) {
 }
 
 }).call(this,require('_process'))
-},{"_process":125,"path":124}],33:[function(require,module,exports){
+},{"_process":160,"path":159}],46:[function(require,module,exports){
 var core = require('./core');
 var fs = require('fs');
 var path = require('path');
@@ -5248,7 +7147,7 @@ module.exports = function (x, opts) {
     }
 };
 
-},{"./caller.js":29,"./core":31,"./node-modules-paths.js":32,"fs":3,"path":124}],34:[function(require,module,exports){
+},{"./caller.js":42,"./core":44,"./node-modules-paths.js":45,"fs":3,"path":159}],47:[function(require,module,exports){
 /*!
  * The buffer module from node.js, for the browser.
  *
@@ -5295,7 +7194,7 @@ Buffer.TYPED_ARRAY_SUPPORT = (function () {
     var buf = new ArrayBuffer(0)
     var arr = new Uint8Array(buf)
     arr.foo = function () { return 42 }
-    return 42 === arr.foo() && // typed array instances can be augmented
+    return arr.foo() === 42 && // typed array instances can be augmented
         typeof arr.subarray === 'function' && // chrome 9-10 lack `subarray`
         new Uint8Array(1).subarray(1, 1).byteLength === 0 // ie10 has broken `subarray`
   } catch (e) {
@@ -5323,60 +7222,67 @@ function Buffer (subject, encoding, noZero) {
 
   // Find the length
   var length
-  if (type === 'number')
-    length = subject > 0 ? subject >>> 0 : 0
-  else if (type === 'string') {
+  if (type === 'number') {
+    length = +subject
+  } else if (type === 'string') {
     length = Buffer.byteLength(subject, encoding)
   } else if (type === 'object' && subject !== null) { // assume object is array-like
     if (subject.type === 'Buffer' && isArray(subject.data))
       subject = subject.data
-    length = +subject.length > 0 ? Math.floor(+subject.length) : 0
-  } else
+    length = +subject.length
+  } else {
     throw new TypeError('must start with number, buffer, array or string')
+  }
 
   if (length > kMaxLength)
     throw new RangeError('Attempt to allocate Buffer larger than maximum ' +
       'size: 0x' + kMaxLength.toString(16) + ' bytes')
 
-  var buf
+  if (length < 0)
+    length = 0
+  else
+    length >>>= 0 // Coerce to uint32.
+
+  var self = this
   if (Buffer.TYPED_ARRAY_SUPPORT) {
     // Preferred: Return an augmented `Uint8Array` instance for best performance
-    buf = Buffer._augment(new Uint8Array(length))
+    /*eslint-disable consistent-this */
+    self = Buffer._augment(new Uint8Array(length))
+    /*eslint-enable consistent-this */
   } else {
     // Fallback: Return THIS instance of Buffer (created by `new`)
-    buf = this
-    buf.length = length
-    buf._isBuffer = true
+    self.length = length
+    self._isBuffer = true
   }
 
   var i
   if (Buffer.TYPED_ARRAY_SUPPORT && typeof subject.byteLength === 'number') {
     // Speed optimization -- use set if we're copying from a typed array
-    buf._set(subject)
+    self._set(subject)
   } else if (isArrayish(subject)) {
     // Treat array-ish objects as a byte array
     if (Buffer.isBuffer(subject)) {
       for (i = 0; i < length; i++)
-        buf[i] = subject.readUInt8(i)
+        self[i] = subject.readUInt8(i)
     } else {
       for (i = 0; i < length; i++)
-        buf[i] = ((subject[i] % 256) + 256) % 256
+        self[i] = ((subject[i] % 256) + 256) % 256
     }
   } else if (type === 'string') {
-    buf.write(subject, 0, encoding)
+    self.write(subject, 0, encoding)
   } else if (type === 'number' && !Buffer.TYPED_ARRAY_SUPPORT && !noZero) {
     for (i = 0; i < length; i++) {
-      buf[i] = 0
+      self[i] = 0
     }
   }
 
   if (length > 0 && length <= Buffer.poolSize)
-    buf.parent = rootParent
+    self.parent = rootParent
 
-  return buf
+  return self
 }
 
-function SlowBuffer(subject, encoding, noZero) {
+function SlowBuffer (subject, encoding, noZero) {
   if (!(this instanceof SlowBuffer))
     return new SlowBuffer(subject, encoding, noZero)
 
@@ -5392,6 +7298,8 @@ Buffer.isBuffer = function (b) {
 Buffer.compare = function (a, b) {
   if (!Buffer.isBuffer(a) || !Buffer.isBuffer(b))
     throw new TypeError('Arguments must be Buffers')
+
+  if (a === b) return 0
 
   var x = a.length
   var y = b.length
@@ -5533,6 +7441,7 @@ Buffer.prototype.toString = function (encoding, start, end) {
 
 Buffer.prototype.equals = function (b) {
   if (!Buffer.isBuffer(b)) throw new TypeError('Argument must be a Buffer')
+  if (this === b) return true
   return Buffer.compare(this, b) === 0
 }
 
@@ -5549,6 +7458,7 @@ Buffer.prototype.inspect = function () {
 
 Buffer.prototype.compare = function (b) {
   if (!Buffer.isBuffer(b)) throw new TypeError('Argument must be a Buffer')
+  if (this === b) return 0
   return Buffer.compare(this, b)
 }
 
@@ -5611,7 +7521,7 @@ function base64Write (buf, string, offset, length) {
 }
 
 function utf16leWrite (buf, string, offset, length) {
-  var charsWritten = blitBuffer(utf16leToBytes(string, buf.length - offset), buf, offset, length, 2)
+  var charsWritten = blitBuffer(utf16leToBytes(string, buf.length - offset), buf, offset, length)
   return charsWritten
 }
 
@@ -5633,7 +7543,7 @@ Buffer.prototype.write = function (string, offset, length, encoding) {
   offset = Number(offset) || 0
 
   if (length < 0 || offset < 0 || offset > this.length)
-    throw new RangeError('attempt to write outside buffer bounds');
+    throw new RangeError('attempt to write outside buffer bounds')
 
   var remaining = this.length - offset
   if (!length) {
@@ -5756,7 +7666,7 @@ Buffer.prototype.slice = function (start, end) {
   end = end === undefined ? len : ~~end
 
   if (start < 0) {
-    start += len;
+    start += len
     if (start < 0)
       start = 0
   } else if (start > len) {
@@ -5825,7 +7735,7 @@ Buffer.prototype.readUIntBE = function (offset, byteLength, noAssert) {
   var val = this[offset + --byteLength]
   var mul = 1
   while (byteLength > 0 && (mul *= 0x100))
-    val += this[offset + --byteLength] * mul;
+    val += this[offset + --byteLength] * mul
 
   return val
 }
@@ -6233,7 +8143,7 @@ Buffer.prototype.writeDoubleBE = function (value, offset, noAssert) {
 
 // copy(targetBuffer, targetStart=0, sourceStart=0, sourceEnd=buffer.length)
 Buffer.prototype.copy = function (target, target_start, start, end) {
-  var source = this
+  var self = this // source
 
   if (!start) start = 0
   if (!end && end !== 0) end = this.length
@@ -6243,12 +8153,12 @@ Buffer.prototype.copy = function (target, target_start, start, end) {
 
   // Copy 0 bytes; we're done
   if (end === start) return 0
-  if (target.length === 0 || source.length === 0) return 0
+  if (target.length === 0 || self.length === 0) return 0
 
   // Fatal error conditions
   if (target_start < 0)
     throw new RangeError('targetStart out of bounds')
-  if (start < 0 || start >= source.length) throw new RangeError('sourceStart out of bounds')
+  if (start < 0 || start >= self.length) throw new RangeError('sourceStart out of bounds')
   if (end < 0) throw new RangeError('sourceEnd out of bounds')
 
   // Are we oob?
@@ -6422,61 +8332,50 @@ function toHex (n) {
   return n.toString(16)
 }
 
-function utf8ToBytes(string, units) {
-  var codePoint, length = string.length
-  var leadSurrogate = null
+function utf8ToBytes (string, units) {
   units = units || Infinity
+  var codePoint
+  var length = string.length
+  var leadSurrogate = null
   var bytes = []
   var i = 0
 
-  for (; i<length; i++) {
+  for (; i < length; i++) {
     codePoint = string.charCodeAt(i)
 
     // is surrogate component
     if (codePoint > 0xD7FF && codePoint < 0xE000) {
-
       // last char was a lead
       if (leadSurrogate) {
-
         // 2 leads in a row
         if (codePoint < 0xDC00) {
           if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
           leadSurrogate = codePoint
           continue
-        }
-
-        // valid surrogate pair
-        else {
+        } else {
+          // valid surrogate pair
           codePoint = leadSurrogate - 0xD800 << 10 | codePoint - 0xDC00 | 0x10000
           leadSurrogate = null
         }
-      }
+      } else {
+        // no lead yet
 
-      // no lead yet
-      else {
-
-        // unexpected trail
         if (codePoint > 0xDBFF) {
+          // unexpected trail
           if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
           continue
-        }
-
-        // unpaired lead
-        else if (i + 1 === length) {
+        } else if (i + 1 === length) {
+          // unpaired lead
           if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
           continue
-        }
-
-        // valid lead
-        else {
+        } else {
+          // valid lead
           leadSurrogate = codePoint
           continue
         }
       }
-    }
-
-    // valid bmp char, but last char was a lead
-    else if (leadSurrogate) {
+    } else if (leadSurrogate) {
+      // valid bmp char, but last char was a lead
       if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
       leadSurrogate = null
     }
@@ -6485,32 +8384,28 @@ function utf8ToBytes(string, units) {
     if (codePoint < 0x80) {
       if ((units -= 1) < 0) break
       bytes.push(codePoint)
-    }
-    else if (codePoint < 0x800) {
+    } else if (codePoint < 0x800) {
       if ((units -= 2) < 0) break
       bytes.push(
         codePoint >> 0x6 | 0xC0,
         codePoint & 0x3F | 0x80
-      );
-    }
-    else if (codePoint < 0x10000) {
+      )
+    } else if (codePoint < 0x10000) {
       if ((units -= 3) < 0) break
       bytes.push(
         codePoint >> 0xC | 0xE0,
         codePoint >> 0x6 & 0x3F | 0x80,
         codePoint & 0x3F | 0x80
-      );
-    }
-    else if (codePoint < 0x200000) {
+      )
+    } else if (codePoint < 0x200000) {
       if ((units -= 4) < 0) break
       bytes.push(
         codePoint >> 0x12 | 0xF0,
         codePoint >> 0xC & 0x3F | 0x80,
         codePoint >> 0x6 & 0x3F | 0x80,
         codePoint & 0x3F | 0x80
-      );
-    }
-    else {
+      )
+    } else {
       throw new Error('Invalid code point')
     }
   }
@@ -6531,7 +8426,6 @@ function utf16leToBytes (str, units) {
   var c, hi, lo
   var byteArray = []
   for (var i = 0; i < str.length; i++) {
-
     if ((units -= 2) < 0) break
 
     c = str.charCodeAt(i)
@@ -6548,8 +8442,7 @@ function base64ToBytes (str) {
   return base64.toByteArray(base64clean(str))
 }
 
-function blitBuffer (src, dst, offset, length, unitSize) {
-  if (unitSize) length -= length % unitSize;
+function blitBuffer (src, dst, offset, length) {
   for (var i = 0; i < length; i++) {
     if ((i + offset >= dst.length) || (i >= src.length))
       break
@@ -6566,7 +8459,7 @@ function decodeUtf8Char (str) {
   }
 }
 
-},{"base64-js":35,"ieee754":36,"is-array":37}],35:[function(require,module,exports){
+},{"base64-js":48,"ieee754":49,"is-array":50}],48:[function(require,module,exports){
 var lookup = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
 ;(function (exports) {
@@ -6692,7 +8585,7 @@ var lookup = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 	exports.fromByteArray = uint8ToBase64
 }(typeof exports === 'undefined' ? (this.base64js = {}) : exports))
 
-},{}],36:[function(require,module,exports){
+},{}],49:[function(require,module,exports){
 exports.read = function(buffer, offset, isLE, mLen, nBytes) {
   var e, m,
       eLen = nBytes * 8 - mLen - 1,
@@ -6778,7 +8671,7 @@ exports.write = function(buffer, value, offset, isLE, mLen, nBytes) {
   buffer[offset + i - d] |= s * 128;
 };
 
-},{}],37:[function(require,module,exports){
+},{}],50:[function(require,module,exports){
 
 /**
  * isArray
@@ -6813,7 +8706,7 @@ module.exports = isArray || function (val) {
   return !! val && '[object Array]' == str.call(val);
 };
 
-},{}],38:[function(require,module,exports){
+},{}],51:[function(require,module,exports){
 (function (Buffer){
 var Writable = require('readable-stream').Writable
 var inherits = require('inherits')
@@ -6949,7 +8842,7 @@ function u8Concat (parts) {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":34,"inherits":59,"readable-stream":45,"typedarray":46}],39:[function(require,module,exports){
+},{"buffer":47,"inherits":72,"readable-stream":58,"typedarray":59}],52:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -7042,7 +8935,7 @@ function forEach (xs, f) {
 }
 
 }).call(this,require('_process'))
-},{"./_stream_readable":41,"./_stream_writable":43,"_process":125,"core-util-is":44,"inherits":59}],40:[function(require,module,exports){
+},{"./_stream_readable":54,"./_stream_writable":56,"_process":160,"core-util-is":57,"inherits":72}],53:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -7090,7 +8983,7 @@ PassThrough.prototype._transform = function(chunk, encoding, cb) {
   cb(null, chunk);
 };
 
-},{"./_stream_transform":42,"core-util-is":44,"inherits":59}],41:[function(require,module,exports){
+},{"./_stream_transform":55,"core-util-is":57,"inherits":72}],54:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -8045,7 +9938,7 @@ function indexOf (xs, x) {
 }
 
 }).call(this,require('_process'))
-},{"./_stream_duplex":39,"_process":125,"buffer":34,"core-util-is":44,"events":58,"inherits":59,"isarray":80,"stream":157,"string_decoder/":158,"util":25}],42:[function(require,module,exports){
+},{"./_stream_duplex":52,"_process":160,"buffer":47,"core-util-is":57,"events":71,"inherits":72,"isarray":106,"stream":192,"string_decoder/":193,"util":38}],55:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -8256,7 +10149,7 @@ function done(stream, er) {
   return stream.push(null);
 }
 
-},{"./_stream_duplex":39,"core-util-is":44,"inherits":59}],43:[function(require,module,exports){
+},{"./_stream_duplex":52,"core-util-is":57,"inherits":72}],56:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -8737,7 +10630,7 @@ function endWritable(stream, state, cb) {
 }
 
 }).call(this,require('_process'))
-},{"./_stream_duplex":39,"_process":125,"buffer":34,"core-util-is":44,"inherits":59,"stream":157}],44:[function(require,module,exports){
+},{"./_stream_duplex":52,"_process":160,"buffer":47,"core-util-is":57,"inherits":72,"stream":192}],57:[function(require,module,exports){
 (function (Buffer){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -8847,7 +10740,7 @@ function objectToString(o) {
   return Object.prototype.toString.call(o);
 }
 }).call(this,require("buffer").Buffer)
-},{"buffer":34}],45:[function(require,module,exports){
+},{"buffer":47}],58:[function(require,module,exports){
 exports = module.exports = require('./lib/_stream_readable.js');
 exports.Stream = require('stream');
 exports.Readable = exports;
@@ -8856,7 +10749,7 @@ exports.Duplex = require('./lib/_stream_duplex.js');
 exports.Transform = require('./lib/_stream_transform.js');
 exports.PassThrough = require('./lib/_stream_passthrough.js');
 
-},{"./lib/_stream_duplex.js":39,"./lib/_stream_passthrough.js":40,"./lib/_stream_readable.js":41,"./lib/_stream_transform.js":42,"./lib/_stream_writable.js":43,"stream":157}],46:[function(require,module,exports){
+},{"./lib/_stream_duplex.js":52,"./lib/_stream_passthrough.js":53,"./lib/_stream_readable.js":54,"./lib/_stream_transform.js":55,"./lib/_stream_writable.js":56,"stream":192}],59:[function(require,module,exports){
 var undefined = (void 0); // Paranoia
 
 // Beyond this value, index getters/setters (i.e. array[0], array[1]) are so slow to
@@ -9488,14 +11381,14 @@ function packF32(v) { return packIEEE754(v, 8, 23); }
 
 }());
 
-},{}],47:[function(require,module,exports){
+},{}],60:[function(require,module,exports){
 module.exports = function () {
     for (var i = 0; i < arguments.length; i++) {
         if (arguments[i] !== undefined) return arguments[i];
     }
 };
 
-},{}],48:[function(require,module,exports){
+},{}],61:[function(require,module,exports){
 var through = require('through2');
 var shasum = require('shasum');
 var isarray = require('isarray');
@@ -9620,9 +11513,9 @@ function depCmp (hashes) {
     }
 }
 
-},{"isarray":80,"shasum":145,"through2":49}],49:[function(require,module,exports){
-arguments[4][24][0].apply(exports,arguments)
-},{"dup":24,"readable-stream/transform":135,"util":190,"xtend":191}],50:[function(require,module,exports){
+},{"isarray":106,"shasum":180,"through2":62}],62:[function(require,module,exports){
+arguments[4][37][0].apply(exports,arguments)
+},{"dup":37,"readable-stream/transform":170,"util":225,"xtend":226}],63:[function(require,module,exports){
 var stream = require("readable-stream");
 
 var duplex2 = module.exports = function duplex2(options, writable, readable) {
@@ -9686,21 +11579,21 @@ DuplexWrapper.prototype._read = function _read(n) {
   this._readable.resume();
 };
 
-},{"readable-stream":57}],51:[function(require,module,exports){
-arguments[4][39][0].apply(exports,arguments)
-},{"./_stream_readable":53,"./_stream_writable":55,"_process":125,"core-util-is":56,"dup":39,"inherits":59}],52:[function(require,module,exports){
-arguments[4][40][0].apply(exports,arguments)
-},{"./_stream_transform":54,"core-util-is":56,"dup":40,"inherits":59}],53:[function(require,module,exports){
-arguments[4][41][0].apply(exports,arguments)
-},{"./_stream_duplex":51,"_process":125,"buffer":34,"core-util-is":56,"dup":41,"events":58,"inherits":59,"isarray":80,"stream":157,"string_decoder/":158,"util":25}],54:[function(require,module,exports){
-arguments[4][42][0].apply(exports,arguments)
-},{"./_stream_duplex":51,"core-util-is":56,"dup":42,"inherits":59}],55:[function(require,module,exports){
-arguments[4][43][0].apply(exports,arguments)
-},{"./_stream_duplex":51,"_process":125,"buffer":34,"core-util-is":56,"dup":43,"inherits":59,"stream":157}],56:[function(require,module,exports){
-arguments[4][44][0].apply(exports,arguments)
-},{"buffer":34,"dup":44}],57:[function(require,module,exports){
-arguments[4][45][0].apply(exports,arguments)
-},{"./lib/_stream_duplex.js":51,"./lib/_stream_passthrough.js":52,"./lib/_stream_readable.js":53,"./lib/_stream_transform.js":54,"./lib/_stream_writable.js":55,"dup":45,"stream":157}],58:[function(require,module,exports){
+},{"readable-stream":70}],64:[function(require,module,exports){
+arguments[4][52][0].apply(exports,arguments)
+},{"./_stream_readable":66,"./_stream_writable":68,"_process":160,"core-util-is":69,"dup":52,"inherits":72}],65:[function(require,module,exports){
+arguments[4][53][0].apply(exports,arguments)
+},{"./_stream_transform":67,"core-util-is":69,"dup":53,"inherits":72}],66:[function(require,module,exports){
+arguments[4][54][0].apply(exports,arguments)
+},{"./_stream_duplex":64,"_process":160,"buffer":47,"core-util-is":69,"dup":54,"events":71,"inherits":72,"isarray":106,"stream":192,"string_decoder/":193,"util":38}],67:[function(require,module,exports){
+arguments[4][55][0].apply(exports,arguments)
+},{"./_stream_duplex":64,"core-util-is":69,"dup":55,"inherits":72}],68:[function(require,module,exports){
+arguments[4][56][0].apply(exports,arguments)
+},{"./_stream_duplex":64,"_process":160,"buffer":47,"core-util-is":69,"dup":56,"inherits":72,"stream":192}],69:[function(require,module,exports){
+arguments[4][57][0].apply(exports,arguments)
+},{"buffer":47,"dup":57}],70:[function(require,module,exports){
+arguments[4][58][0].apply(exports,arguments)
+},{"./lib/_stream_duplex.js":64,"./lib/_stream_passthrough.js":65,"./lib/_stream_readable.js":66,"./lib/_stream_transform.js":67,"./lib/_stream_writable.js":68,"dup":58,"stream":192}],71:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -10003,7 +11896,7 @@ function isUndefined(arg) {
   return arg === void 0;
 }
 
-},{}],59:[function(require,module,exports){
+},{}],72:[function(require,module,exports){
 if (typeof Object.create === 'function') {
   // implementation from standard node.js 'util' module
   module.exports = function inherits(ctor, superCtor) {
@@ -10028,7 +11921,7 @@ if (typeof Object.create === 'function') {
   }
 }
 
-},{}],60:[function(require,module,exports){
+},{}],73:[function(require,module,exports){
 (function (Buffer){
 var parseScope = require('lexical-scope');
 var through = require('through');
@@ -10158,7 +12051,8 @@ function closeOver (globals, src, file, opts) {
     if (!opts.debug) {
         return wrappedSource;
     }
-    var sourceFile = path.relative(opts.basedir, file);
+    var sourceFile = path.relative(opts.basedir, file)
+        .replace(/\\/g, '/');
     var sourceMap = combineSourceMap.create().addFile(
         { sourceFile: sourceFile, source: src},
         { line: 1 });
@@ -10167,35 +12061,362 @@ function closeOver (globals, src, file, opts) {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":34,"combine-source-map":61,"fs":3,"lexical-scope":76,"path":124,"through":79,"xtend":191}],61:[function(require,module,exports){
+},{"buffer":47,"combine-source-map":74,"fs":3,"lexical-scope":102,"path":159,"through":105,"xtend":226}],74:[function(require,module,exports){
 arguments[4][9][0].apply(exports,arguments)
-},{"./lib/mappings-from-map":62,"convert-source-map":63,"dup":9,"inline-source-map":64}],62:[function(require,module,exports){
+},{"./lib/mappings-from-map":75,"convert-source-map":76,"dup":9,"inline-source-map":77}],75:[function(require,module,exports){
 arguments[4][10][0].apply(exports,arguments)
-},{"dup":10,"source-map":65}],63:[function(require,module,exports){
+},{"dup":10,"source-map":91}],76:[function(require,module,exports){
 arguments[4][11][0].apply(exports,arguments)
-},{"buffer":34,"dup":11,"fs":3,"path":124}],64:[function(require,module,exports){
+},{"buffer":47,"dup":11,"fs":3,"path":159}],77:[function(require,module,exports){
 arguments[4][12][0].apply(exports,arguments)
-},{"buffer":34,"dup":12,"source-map":65}],65:[function(require,module,exports){
+},{"buffer":47,"dup":12,"source-map":78}],78:[function(require,module,exports){
 arguments[4][13][0].apply(exports,arguments)
-},{"./source-map/source-map-consumer":71,"./source-map/source-map-generator":72,"./source-map/source-node":73,"dup":13}],66:[function(require,module,exports){
+},{"./source-map/source-map-consumer":86,"./source-map/source-map-generator":87,"./source-map/source-node":88,"dup":13}],79:[function(require,module,exports){
 arguments[4][14][0].apply(exports,arguments)
-},{"./util":74,"amdefine":75,"dup":14}],67:[function(require,module,exports){
+},{"./util":89,"amdefine":90,"dup":14}],80:[function(require,module,exports){
 arguments[4][15][0].apply(exports,arguments)
-},{"./base64":68,"amdefine":75,"dup":15}],68:[function(require,module,exports){
+},{"./base64":81,"amdefine":90,"dup":15}],81:[function(require,module,exports){
 arguments[4][16][0].apply(exports,arguments)
-},{"amdefine":75,"dup":16}],69:[function(require,module,exports){
+},{"amdefine":90,"dup":16}],82:[function(require,module,exports){
 arguments[4][17][0].apply(exports,arguments)
-},{"amdefine":75,"dup":17}],70:[function(require,module,exports){
+},{"./array-set":79,"./base64-vlq":80,"./binary-search":83,"./source-map-consumer":86,"./util":89,"amdefine":90,"dup":17}],83:[function(require,module,exports){
 arguments[4][18][0].apply(exports,arguments)
-},{"./util":74,"amdefine":75,"dup":18}],71:[function(require,module,exports){
+},{"amdefine":90,"dup":18}],84:[function(require,module,exports){
 arguments[4][19][0].apply(exports,arguments)
-},{"./array-set":66,"./base64-vlq":67,"./binary-search":69,"./util":74,"amdefine":75,"dup":19}],72:[function(require,module,exports){
+},{"./basic-source-map-consumer":82,"./binary-search":83,"./source-map-consumer":86,"./util":89,"amdefine":90,"dup":19}],85:[function(require,module,exports){
 arguments[4][20][0].apply(exports,arguments)
-},{"./array-set":66,"./base64-vlq":67,"./mapping-list":70,"./util":74,"amdefine":75,"dup":20}],73:[function(require,module,exports){
+},{"./util":89,"amdefine":90,"dup":20}],86:[function(require,module,exports){
 arguments[4][21][0].apply(exports,arguments)
-},{"./source-map-generator":72,"./util":74,"amdefine":75,"dup":21}],74:[function(require,module,exports){
+},{"./basic-source-map-consumer":82,"./indexed-source-map-consumer":84,"./util":89,"amdefine":90,"dup":21}],87:[function(require,module,exports){
 arguments[4][22][0].apply(exports,arguments)
-},{"amdefine":75,"dup":22}],75:[function(require,module,exports){
+},{"./array-set":79,"./base64-vlq":80,"./mapping-list":85,"./util":89,"amdefine":90,"dup":22}],88:[function(require,module,exports){
+arguments[4][23][0].apply(exports,arguments)
+},{"./source-map-generator":87,"./util":89,"amdefine":90,"dup":23}],89:[function(require,module,exports){
+arguments[4][24][0].apply(exports,arguments)
+},{"amdefine":90,"dup":24}],90:[function(require,module,exports){
+(function (process,__filename){
+/** vim: et:ts=4:sw=4:sts=4
+ * @license amdefine 0.1.0 Copyright (c) 2011, The Dojo Foundation All Rights Reserved.
+ * Available via the MIT or new BSD license.
+ * see: http://github.com/jrburke/amdefine for details
+ */
+
+/*jslint node: true */
+/*global module, process */
+'use strict';
+
+/**
+ * Creates a define for node.
+ * @param {Object} module the "module" object that is defined by Node for the
+ * current module.
+ * @param {Function} [requireFn]. Node's require function for the current module.
+ * It only needs to be passed in Node versions before 0.5, when module.require
+ * did not exist.
+ * @returns {Function} a define function that is usable for the current node
+ * module.
+ */
+function amdefine(module, requireFn) {
+    'use strict';
+    var defineCache = {},
+        loaderCache = {},
+        alreadyCalled = false,
+        path = require('path'),
+        makeRequire, stringRequire;
+
+    /**
+     * Trims the . and .. from an array of path segments.
+     * It will keep a leading path segment if a .. will become
+     * the first path segment, to help with module name lookups,
+     * which act like paths, but can be remapped. But the end result,
+     * all paths that use this function should look normalized.
+     * NOTE: this method MODIFIES the input array.
+     * @param {Array} ary the array of path segments.
+     */
+    function trimDots(ary) {
+        var i, part;
+        for (i = 0; ary[i]; i+= 1) {
+            part = ary[i];
+            if (part === '.') {
+                ary.splice(i, 1);
+                i -= 1;
+            } else if (part === '..') {
+                if (i === 1 && (ary[2] === '..' || ary[0] === '..')) {
+                    //End of the line. Keep at least one non-dot
+                    //path segment at the front so it can be mapped
+                    //correctly to disk. Otherwise, there is likely
+                    //no path mapping for a path starting with '..'.
+                    //This can still fail, but catches the most reasonable
+                    //uses of ..
+                    break;
+                } else if (i > 0) {
+                    ary.splice(i - 1, 2);
+                    i -= 2;
+                }
+            }
+        }
+    }
+
+    function normalize(name, baseName) {
+        var baseParts;
+
+        //Adjust any relative paths.
+        if (name && name.charAt(0) === '.') {
+            //If have a base name, try to normalize against it,
+            //otherwise, assume it is a top-level require that will
+            //be relative to baseUrl in the end.
+            if (baseName) {
+                baseParts = baseName.split('/');
+                baseParts = baseParts.slice(0, baseParts.length - 1);
+                baseParts = baseParts.concat(name.split('/'));
+                trimDots(baseParts);
+                name = baseParts.join('/');
+            }
+        }
+
+        return name;
+    }
+
+    /**
+     * Create the normalize() function passed to a loader plugin's
+     * normalize method.
+     */
+    function makeNormalize(relName) {
+        return function (name) {
+            return normalize(name, relName);
+        };
+    }
+
+    function makeLoad(id) {
+        function load(value) {
+            loaderCache[id] = value;
+        }
+
+        load.fromText = function (id, text) {
+            //This one is difficult because the text can/probably uses
+            //define, and any relative paths and requires should be relative
+            //to that id was it would be found on disk. But this would require
+            //bootstrapping a module/require fairly deeply from node core.
+            //Not sure how best to go about that yet.
+            throw new Error('amdefine does not implement load.fromText');
+        };
+
+        return load;
+    }
+
+    makeRequire = function (systemRequire, exports, module, relId) {
+        function amdRequire(deps, callback) {
+            if (typeof deps === 'string') {
+                //Synchronous, single module require('')
+                return stringRequire(systemRequire, exports, module, deps, relId);
+            } else {
+                //Array of dependencies with a callback.
+
+                //Convert the dependencies to modules.
+                deps = deps.map(function (depName) {
+                    return stringRequire(systemRequire, exports, module, depName, relId);
+                });
+
+                //Wait for next tick to call back the require call.
+                process.nextTick(function () {
+                    callback.apply(null, deps);
+                });
+            }
+        }
+
+        amdRequire.toUrl = function (filePath) {
+            if (filePath.indexOf('.') === 0) {
+                return normalize(filePath, path.dirname(module.filename));
+            } else {
+                return filePath;
+            }
+        };
+
+        return amdRequire;
+    };
+
+    //Favor explicit value, passed in if the module wants to support Node 0.4.
+    requireFn = requireFn || function req() {
+        return module.require.apply(module, arguments);
+    };
+
+    function runFactory(id, deps, factory) {
+        var r, e, m, result;
+
+        if (id) {
+            e = loaderCache[id] = {};
+            m = {
+                id: id,
+                uri: __filename,
+                exports: e
+            };
+            r = makeRequire(requireFn, e, m, id);
+        } else {
+            //Only support one define call per file
+            if (alreadyCalled) {
+                throw new Error('amdefine with no module ID cannot be called more than once per file.');
+            }
+            alreadyCalled = true;
+
+            //Use the real variables from node
+            //Use module.exports for exports, since
+            //the exports in here is amdefine exports.
+            e = module.exports;
+            m = module;
+            r = makeRequire(requireFn, e, m, module.id);
+        }
+
+        //If there are dependencies, they are strings, so need
+        //to convert them to dependency values.
+        if (deps) {
+            deps = deps.map(function (depName) {
+                return r(depName);
+            });
+        }
+
+        //Call the factory with the right dependencies.
+        if (typeof factory === 'function') {
+            result = factory.apply(m.exports, deps);
+        } else {
+            result = factory;
+        }
+
+        if (result !== undefined) {
+            m.exports = result;
+            if (id) {
+                loaderCache[id] = m.exports;
+            }
+        }
+    }
+
+    stringRequire = function (systemRequire, exports, module, id, relId) {
+        //Split the ID by a ! so that
+        var index = id.indexOf('!'),
+            originalId = id,
+            prefix, plugin;
+
+        if (index === -1) {
+            id = normalize(id, relId);
+
+            //Straight module lookup. If it is one of the special dependencies,
+            //deal with it, otherwise, delegate to node.
+            if (id === 'require') {
+                return makeRequire(systemRequire, exports, module, relId);
+            } else if (id === 'exports') {
+                return exports;
+            } else if (id === 'module') {
+                return module;
+            } else if (loaderCache.hasOwnProperty(id)) {
+                return loaderCache[id];
+            } else if (defineCache[id]) {
+                runFactory.apply(null, defineCache[id]);
+                return loaderCache[id];
+            } else {
+                if(systemRequire) {
+                    return systemRequire(originalId);
+                } else {
+                    throw new Error('No module with ID: ' + id);
+                }
+            }
+        } else {
+            //There is a plugin in play.
+            prefix = id.substring(0, index);
+            id = id.substring(index + 1, id.length);
+
+            plugin = stringRequire(systemRequire, exports, module, prefix, relId);
+
+            if (plugin.normalize) {
+                id = plugin.normalize(id, makeNormalize(relId));
+            } else {
+                //Normalize the ID normally.
+                id = normalize(id, relId);
+            }
+
+            if (loaderCache[id]) {
+                return loaderCache[id];
+            } else {
+                plugin.load(id, makeRequire(systemRequire, exports, module, relId), makeLoad(id), {});
+
+                return loaderCache[id];
+            }
+        }
+    };
+
+    //Create a define function specific to the module asking for amdefine.
+    function define(id, deps, factory) {
+        if (Array.isArray(id)) {
+            factory = deps;
+            deps = id;
+            id = undefined;
+        } else if (typeof id !== 'string') {
+            factory = id;
+            id = deps = undefined;
+        }
+
+        if (deps && !Array.isArray(deps)) {
+            factory = deps;
+            deps = undefined;
+        }
+
+        if (!deps) {
+            deps = ['require', 'exports', 'module'];
+        }
+
+        //Set up properties for this module. If an ID, then use
+        //internal cache. If no ID, then use the external variables
+        //for this node module.
+        if (id) {
+            //Put the module in deep freeze until there is a
+            //require call for it.
+            defineCache[id] = [id, deps, factory];
+        } else {
+            runFactory(id, deps, factory);
+        }
+    }
+
+    //define.require, which has access to all the values in the
+    //cache. Useful for AMD modules that all have IDs in the file,
+    //but need to finally export a value to node based on one of those
+    //IDs.
+    define.require = function (id) {
+        if (loaderCache[id]) {
+            return loaderCache[id];
+        }
+
+        if (defineCache[id]) {
+            runFactory.apply(null, defineCache[id]);
+            return loaderCache[id];
+        }
+    };
+
+    define.amd = {};
+
+    return define;
+}
+
+module.exports = amdefine;
+
+}).call(this,require('_process'),"/node_modules\\browserify\\node_modules\\insert-module-globals\\node_modules\\combine-source-map\\node_modules\\inline-source-map\\node_modules\\source-map\\node_modules\\amdefine\\amdefine.js")
+},{"_process":160,"path":159}],91:[function(require,module,exports){
+arguments[4][13][0].apply(exports,arguments)
+},{"./source-map/source-map-consumer":97,"./source-map/source-map-generator":98,"./source-map/source-node":99,"dup":13}],92:[function(require,module,exports){
+arguments[4][14][0].apply(exports,arguments)
+},{"./util":100,"amdefine":101,"dup":14}],93:[function(require,module,exports){
+arguments[4][15][0].apply(exports,arguments)
+},{"./base64":94,"amdefine":101,"dup":15}],94:[function(require,module,exports){
+arguments[4][16][0].apply(exports,arguments)
+},{"amdefine":101,"dup":16}],95:[function(require,module,exports){
+arguments[4][30][0].apply(exports,arguments)
+},{"amdefine":101,"dup":30}],96:[function(require,module,exports){
+arguments[4][20][0].apply(exports,arguments)
+},{"./util":100,"amdefine":101,"dup":20}],97:[function(require,module,exports){
+arguments[4][32][0].apply(exports,arguments)
+},{"./array-set":92,"./base64-vlq":93,"./binary-search":95,"./util":100,"amdefine":101,"dup":32}],98:[function(require,module,exports){
+arguments[4][33][0].apply(exports,arguments)
+},{"./array-set":92,"./base64-vlq":93,"./mapping-list":96,"./util":100,"amdefine":101,"dup":33}],99:[function(require,module,exports){
+arguments[4][23][0].apply(exports,arguments)
+},{"./source-map-generator":98,"./util":100,"amdefine":101,"dup":23}],100:[function(require,module,exports){
+arguments[4][24][0].apply(exports,arguments)
+},{"amdefine":101,"dup":24}],101:[function(require,module,exports){
 (function (process,__filename){
 /** vim: et:ts=4:sw=4:sts=4
  * @license amdefine 0.1.0 Copyright (c) 2011, The Dojo Foundation All Rights Reserved.
@@ -10498,7 +12719,7 @@ function amdefine(module, requireFn) {
 module.exports = amdefine;
 
 }).call(this,require('_process'),"/node_modules\\browserify\\node_modules\\insert-module-globals\\node_modules\\combine-source-map\\node_modules\\source-map\\node_modules\\amdefine\\amdefine.js")
-},{"_process":125,"path":124}],76:[function(require,module,exports){
+},{"_process":160,"path":159}],102:[function(require,module,exports){
 var astw = require('astw');
 
 module.exports = function (src) {
@@ -10675,7 +12896,7 @@ function indexOf (xs, x) {
     return -1;
 }
 
-},{"astw":77}],77:[function(require,module,exports){
+},{"astw":103}],103:[function(require,module,exports){
 var parse = require('esprima-fb').parse;
 
 module.exports = function (src) {
@@ -10719,7 +12940,7 @@ var objectKeys = Object.keys || function (obj) {
     return keys;
 };
 
-},{"esprima-fb":78}],78:[function(require,module,exports){
+},{"esprima-fb":104}],104:[function(require,module,exports){
 /*
   Copyright (C) 2013 Ariya Hidayat <ariya.hidayat@gmail.com>
   Copyright (C) 2013 Thaddee Tyl <thaddee.tyl@gmail.com>
@@ -17027,14 +19248,14 @@ parseYieldExpression: true
 }));
 /* vim: set sw=4 ts=4 et tw=80 : */
 
-},{}],79:[function(require,module,exports){
+},{}],105:[function(require,module,exports){
 arguments[4][7][0].apply(exports,arguments)
-},{"_process":125,"dup":7,"stream":157}],80:[function(require,module,exports){
+},{"_process":160,"dup":7,"stream":192}],106:[function(require,module,exports){
 module.exports = Array.isArray || function (arr) {
   return Object.prototype.toString.call(arr) == '[object Array]';
 };
 
-},{}],81:[function(require,module,exports){
+},{}],107:[function(require,module,exports){
 var Splicer = require('stream-splicer');
 var inherits = require('inherits');
 var isarray = require('isarray');
@@ -17101,7 +19322,7 @@ Labeled.prototype.splice = function (key) {
     return Splicer.prototype.splice.apply(this, args);
 };
 
-},{"inherits":59,"isarray":80,"stream-splicer":82}],82:[function(require,module,exports){
+},{"inherits":72,"isarray":106,"stream-splicer":108}],108:[function(require,module,exports){
 (function (process){
 var Duplex = require('readable-stream').Duplex;
 var Readable = require('readable-stream').Readable;
@@ -17299,7 +19520,7 @@ Pipeline.prototype._wrapStream = function (stream) {
 };
 
 }).call(this,require('_process'))
-},{"_process":125,"indexof":83,"inherits":59,"isarray":80,"readable-stream":90,"readable-wrap":91}],83:[function(require,module,exports){
+},{"_process":160,"indexof":109,"inherits":72,"isarray":106,"readable-stream":116,"readable-wrap":117}],109:[function(require,module,exports){
 
 var indexOf = [].indexOf;
 
@@ -17310,21 +19531,21 @@ module.exports = function(arr, obj){
   }
   return -1;
 };
-},{}],84:[function(require,module,exports){
-arguments[4][39][0].apply(exports,arguments)
-},{"./_stream_readable":86,"./_stream_writable":88,"_process":125,"core-util-is":89,"dup":39,"inherits":59}],85:[function(require,module,exports){
-arguments[4][40][0].apply(exports,arguments)
-},{"./_stream_transform":87,"core-util-is":89,"dup":40,"inherits":59}],86:[function(require,module,exports){
-arguments[4][41][0].apply(exports,arguments)
-},{"./_stream_duplex":84,"_process":125,"buffer":34,"core-util-is":89,"dup":41,"events":58,"inherits":59,"isarray":80,"stream":157,"string_decoder/":158,"util":25}],87:[function(require,module,exports){
-arguments[4][42][0].apply(exports,arguments)
-},{"./_stream_duplex":84,"core-util-is":89,"dup":42,"inherits":59}],88:[function(require,module,exports){
-arguments[4][43][0].apply(exports,arguments)
-},{"./_stream_duplex":84,"_process":125,"buffer":34,"core-util-is":89,"dup":43,"inherits":59,"stream":157}],89:[function(require,module,exports){
-arguments[4][44][0].apply(exports,arguments)
-},{"buffer":34,"dup":44}],90:[function(require,module,exports){
-arguments[4][45][0].apply(exports,arguments)
-},{"./lib/_stream_duplex.js":84,"./lib/_stream_passthrough.js":85,"./lib/_stream_readable.js":86,"./lib/_stream_transform.js":87,"./lib/_stream_writable.js":88,"dup":45,"stream":157}],91:[function(require,module,exports){
+},{}],110:[function(require,module,exports){
+arguments[4][52][0].apply(exports,arguments)
+},{"./_stream_readable":112,"./_stream_writable":114,"_process":160,"core-util-is":115,"dup":52,"inherits":72}],111:[function(require,module,exports){
+arguments[4][53][0].apply(exports,arguments)
+},{"./_stream_transform":113,"core-util-is":115,"dup":53,"inherits":72}],112:[function(require,module,exports){
+arguments[4][54][0].apply(exports,arguments)
+},{"./_stream_duplex":110,"_process":160,"buffer":47,"core-util-is":115,"dup":54,"events":71,"inherits":72,"isarray":106,"stream":192,"string_decoder/":193,"util":38}],113:[function(require,module,exports){
+arguments[4][55][0].apply(exports,arguments)
+},{"./_stream_duplex":110,"core-util-is":115,"dup":55,"inherits":72}],114:[function(require,module,exports){
+arguments[4][56][0].apply(exports,arguments)
+},{"./_stream_duplex":110,"_process":160,"buffer":47,"core-util-is":115,"dup":56,"inherits":72,"stream":192}],115:[function(require,module,exports){
+arguments[4][57][0].apply(exports,arguments)
+},{"buffer":47,"dup":57}],116:[function(require,module,exports){
+arguments[4][58][0].apply(exports,arguments)
+},{"./lib/_stream_duplex.js":110,"./lib/_stream_passthrough.js":111,"./lib/_stream_readable.js":112,"./lib/_stream_transform.js":113,"./lib/_stream_writable.js":114,"dup":58,"stream":192}],117:[function(require,module,exports){
 var Readable = require('readable-stream').Readable;
 
 // wrap an old-style stream as the async data source.
@@ -17402,11 +19623,10 @@ function wrap (stream, opts) {
   return self;
 };
 
-},{"readable-stream":90}],92:[function(require,module,exports){
+},{"readable-stream":116}],118:[function(require,module,exports){
 (function (process){
 var fs = require('fs');
 var path = require('path');
-var spawn = require('child_process').spawn;
 
 var browserResolve = require('browser-resolve');
 var nodeResolve = require('resolve');
@@ -17417,6 +19637,7 @@ var parents = require('parents');
 var combine = require('stream-combiner2');
 var duplexer = require('duplexer2');
 var copy = require('shallow-copy');
+var xtend = require('xtend');
 
 var inherits = require('inherits');
 var Transform = require('readable-stream').Transform;
@@ -17436,6 +19657,7 @@ function Deps (opts) {
     this.pkgCache = opts.packageCache || {};
     this.pkgFileCache = {};
     this.pkgFileCachePending = {};
+    this._emittedPkg = {};
     this.visited = {};
     this.walking = {};
     this.entries = [];
@@ -17455,10 +19677,19 @@ function Deps (opts) {
     this.resolver = opts.resolve || browserResolve;
     this.options = copy(opts || {});
     if (!this.options.modules) this.options.modules = {};
+
+    // If the caller passes options.expose, store resolved pathnames for exposed
+    // modules in it. If not, set it anyway so it's defined later.
+    if (!this.options.expose) this.options.expose = {};
     this.pending = 0;
     
     var topfile = path.join(this.basedir, '__fake.js');
-    this.top = { id: topfile, filename: topfile, paths: this.paths };
+    this.top = {
+        id: topfile,
+        filename: topfile,
+        paths: this.paths,
+        basedir: this.basedir
+    };
 }
 
 Deps.prototype._transform = function (row, enc, next) {
@@ -17510,8 +19741,11 @@ Deps.prototype._flush = function () {
     Object.keys(files).forEach(function (key) {
         var r = files[key];
         var pkg = r.pkg || {};
-        if (!pkg.__dirname) pkg.__dirname = path.dirname(r.row.file);
-        self.walk(r.row, self.top);
+        var dir = path.dirname(r.row.file);
+        if (!pkg.__dirname) pkg.__dirname = dir;
+        self.walk(r.row, xtend(self.top, {
+            filename: path.join(dir, '_fake.js')
+        }));
     });
     if (this.pending === 0) this.push(null);
     this._ended = true;
@@ -17533,7 +19767,7 @@ Deps.prototype.resolve = function (id, parent, cb) {
     
     var pkgdir;
     parent.packageFilter = function (p, x) {
-        pkgdir = x;
+        pkgdir = path.dirname(x);
         if (opts.packageFilter) return opts.packageFilter(p, x);
         else return p;
     };
@@ -17692,9 +19926,16 @@ Deps.prototype.walk = function (id, parent, cb) {
     
     self.resolve(id, parent, function (err, file, pkg) {
         if (rec.expose) {
-            self.options.modules[rec.expose] = file;
+            // Set options.expose to make the resolved pathname available to the
+            // caller. They may or may not have requested it, but it's harmless
+            // to set this if they didn't.
+            self.options.expose[rec.expose] =
+                self.options.modules[rec.expose] = file;
         }
-        if (pkg) self.emit('package', pkg);
+        if (pkg && !self._emittedPkg[pkg.__dirname]) {
+            self._emittedPkg[pkg.__dirname] = true;
+            self.emit('package', pkg);
+        }
         
         if (opts.postFilter && !opts.postFilter(id, file, pkg)) {
             if (--self.pending === 0) self.push(null);
@@ -17914,7 +20155,7 @@ function wrapTransform (tr) {
 }
 
 }).call(this,require('_process'))
-},{"_process":125,"browser-resolve":26,"child_process":3,"concat-stream":38,"detective":93,"duplexer2":50,"fs":3,"inherits":59,"parents":122,"path":124,"readable-stream":134,"resolve":137,"shallow-copy":144,"stream-combiner2":113,"through2":121}],93:[function(require,module,exports){
+},{"_process":160,"browser-resolve":39,"concat-stream":51,"detective":119,"duplexer2":63,"fs":3,"inherits":72,"parents":157,"path":159,"readable-stream":169,"resolve":139,"shallow-copy":179,"stream-combiner2":146,"through2":155,"xtend":156}],119:[function(require,module,exports){
 var aparse = require('acorn').parse;
 var defined = require('defined');
 
@@ -18002,7 +20243,7 @@ exports.find = function (src, opts) {
     return modules;
 };
 
-},{"acorn":94,"defined":47,"escodegen":95}],94:[function(require,module,exports){
+},{"acorn":120,"defined":60,"escodegen":121}],120:[function(require,module,exports){
 // Acorn is a tiny, fast JavaScript parser written in JavaScript.
 //
 // Acorn was written by Marijn Haverbeke and various contributors and
@@ -20591,7 +22832,7 @@ exports.find = function (src, opts) {
 
 });
 
-},{}],95:[function(require,module,exports){
+},{}],121:[function(require,module,exports){
 (function (global){
 /*
   Copyright (C) 2012-2014 Yusuke Suzuki <utatane.tea@gmail.com>
@@ -23153,7 +25394,7 @@ exports.find = function (src, opts) {
 /* vim: set sw=4 ts=4 et tw=80 : */
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./package.json":112,"estraverse":96,"esutils":100,"source-map":101}],96:[function(require,module,exports){
+},{"./package.json":138,"estraverse":122,"esutils":126,"source-map":127}],122:[function(require,module,exports){
 /*
   Copyright (C) 2012-2013 Yusuke Suzuki <utatane.tea@gmail.com>
   Copyright (C) 2012 Ariya Hidayat <ariya.hidayat@gmail.com>
@@ -23998,7 +26239,7 @@ exports.find = function (src, opts) {
 }));
 /* vim: set sw=4 ts=4 et tw=80 : */
 
-},{}],97:[function(require,module,exports){
+},{}],123:[function(require,module,exports){
 /*
   Copyright (C) 2013 Yusuke Suzuki <utatane.tea@gmail.com>
 
@@ -24144,7 +26385,7 @@ exports.find = function (src, opts) {
 }());
 /* vim: set sw=4 ts=4 et tw=80 : */
 
-},{}],98:[function(require,module,exports){
+},{}],124:[function(require,module,exports){
 /*
   Copyright (C) 2013-2014 Yusuke Suzuki <utatane.tea@gmail.com>
   Copyright (C) 2014 Ivan Nikulin <ifaaan@gmail.com>
@@ -24247,7 +26488,7 @@ exports.find = function (src, opts) {
 }());
 /* vim: set sw=4 ts=4 et tw=80 : */
 
-},{}],99:[function(require,module,exports){
+},{}],125:[function(require,module,exports){
 /*
   Copyright (C) 2013 Yusuke Suzuki <utatane.tea@gmail.com>
 
@@ -24386,7 +26627,7 @@ exports.find = function (src, opts) {
 }());
 /* vim: set sw=4 ts=4 et tw=80 : */
 
-},{"./code":98}],100:[function(require,module,exports){
+},{"./code":124}],126:[function(require,module,exports){
 /*
   Copyright (C) 2013 Yusuke Suzuki <utatane.tea@gmail.com>
 
@@ -24421,27 +26662,27 @@ exports.find = function (src, opts) {
 }());
 /* vim: set sw=4 ts=4 et tw=80 : */
 
-},{"./ast":97,"./code":98,"./keyword":99}],101:[function(require,module,exports){
+},{"./ast":123,"./code":124,"./keyword":125}],127:[function(require,module,exports){
 arguments[4][13][0].apply(exports,arguments)
-},{"./source-map/source-map-consumer":107,"./source-map/source-map-generator":108,"./source-map/source-node":109,"dup":13}],102:[function(require,module,exports){
+},{"./source-map/source-map-consumer":133,"./source-map/source-map-generator":134,"./source-map/source-node":135,"dup":13}],128:[function(require,module,exports){
 arguments[4][14][0].apply(exports,arguments)
-},{"./util":110,"amdefine":111,"dup":14}],103:[function(require,module,exports){
+},{"./util":136,"amdefine":137,"dup":14}],129:[function(require,module,exports){
 arguments[4][15][0].apply(exports,arguments)
-},{"./base64":104,"amdefine":111,"dup":15}],104:[function(require,module,exports){
+},{"./base64":130,"amdefine":137,"dup":15}],130:[function(require,module,exports){
 arguments[4][16][0].apply(exports,arguments)
-},{"amdefine":111,"dup":16}],105:[function(require,module,exports){
-arguments[4][17][0].apply(exports,arguments)
-},{"amdefine":111,"dup":17}],106:[function(require,module,exports){
-arguments[4][18][0].apply(exports,arguments)
-},{"./util":110,"amdefine":111,"dup":18}],107:[function(require,module,exports){
-arguments[4][19][0].apply(exports,arguments)
-},{"./array-set":102,"./base64-vlq":103,"./binary-search":105,"./util":110,"amdefine":111,"dup":19}],108:[function(require,module,exports){
+},{"amdefine":137,"dup":16}],131:[function(require,module,exports){
+arguments[4][30][0].apply(exports,arguments)
+},{"amdefine":137,"dup":30}],132:[function(require,module,exports){
 arguments[4][20][0].apply(exports,arguments)
-},{"./array-set":102,"./base64-vlq":103,"./mapping-list":106,"./util":110,"amdefine":111,"dup":20}],109:[function(require,module,exports){
-arguments[4][21][0].apply(exports,arguments)
-},{"./source-map-generator":108,"./util":110,"amdefine":111,"dup":21}],110:[function(require,module,exports){
-arguments[4][22][0].apply(exports,arguments)
-},{"amdefine":111,"dup":22}],111:[function(require,module,exports){
+},{"./util":136,"amdefine":137,"dup":20}],133:[function(require,module,exports){
+arguments[4][32][0].apply(exports,arguments)
+},{"./array-set":128,"./base64-vlq":129,"./binary-search":131,"./util":136,"amdefine":137,"dup":32}],134:[function(require,module,exports){
+arguments[4][33][0].apply(exports,arguments)
+},{"./array-set":128,"./base64-vlq":129,"./mapping-list":132,"./util":136,"amdefine":137,"dup":33}],135:[function(require,module,exports){
+arguments[4][23][0].apply(exports,arguments)
+},{"./source-map-generator":134,"./util":136,"amdefine":137,"dup":23}],136:[function(require,module,exports){
+arguments[4][24][0].apply(exports,arguments)
+},{"amdefine":137,"dup":24}],137:[function(require,module,exports){
 (function (process,__filename){
 /** vim: et:ts=4:sw=4:sts=4
  * @license amdefine 0.1.0 Copyright (c) 2011, The Dojo Foundation All Rights Reserved.
@@ -24744,7 +26985,7 @@ function amdefine(module, requireFn) {
 module.exports = amdefine;
 
 }).call(this,require('_process'),"/node_modules\\browserify\\node_modules\\module-deps\\node_modules\\detective\\node_modules\\escodegen\\node_modules\\source-map\\node_modules\\amdefine\\amdefine.js")
-},{"_process":125,"path":124}],112:[function(require,module,exports){
+},{"_process":160,"path":159}],138:[function(require,module,exports){
 module.exports={
   "name": "escodegen",
   "description": "ECMAScript code generator",
@@ -24833,7 +27074,21 @@ module.exports={
   "readme": "ERROR: No README data found!"
 }
 
-},{}],113:[function(require,module,exports){
+},{}],139:[function(require,module,exports){
+arguments[4][40][0].apply(exports,arguments)
+},{"./lib/async":140,"./lib/core":143,"./lib/sync":145,"dup":40}],140:[function(require,module,exports){
+arguments[4][41][0].apply(exports,arguments)
+},{"./caller.js":141,"./core":143,"./node-modules-paths.js":144,"_process":160,"dup":41,"fs":3,"path":159}],141:[function(require,module,exports){
+arguments[4][42][0].apply(exports,arguments)
+},{"dup":42}],142:[function(require,module,exports){
+arguments[4][43][0].apply(exports,arguments)
+},{"dup":43}],143:[function(require,module,exports){
+arguments[4][44][0].apply(exports,arguments)
+},{"./core.json":142,"dup":44}],144:[function(require,module,exports){
+arguments[4][45][0].apply(exports,arguments)
+},{"_process":160,"dup":45,"path":159}],145:[function(require,module,exports){
+arguments[4][46][0].apply(exports,arguments)
+},{"./caller.js":141,"./core":143,"./node-modules-paths.js":144,"dup":46,"fs":3,"path":159}],146:[function(require,module,exports){
 var duplexer = require('duplexer2')
 var through = require('through2')
 
@@ -24907,9 +27162,28 @@ function wrap (tr, opts) {
   return dup;
 }
 
-},{"duplexer2":50,"through2":114}],114:[function(require,module,exports){
-arguments[4][24][0].apply(exports,arguments)
-},{"dup":24,"readable-stream/transform":135,"util":190,"xtend":191}],115:[function(require,module,exports){
+},{"duplexer2":63,"through2":148}],147:[function(require,module,exports){
+module.exports = extend
+
+function extend() {
+    var target = {}
+
+    for (var i = 0; i < arguments.length; i++) {
+        var source = arguments[i]
+
+        for (var key in source) {
+            if (source.hasOwnProperty(key)) {
+                target[key] = source[key]
+            }
+        }
+    }
+
+    return target
+}
+
+},{}],148:[function(require,module,exports){
+arguments[4][37][0].apply(exports,arguments)
+},{"dup":37,"readable-stream/transform":170,"util":225,"xtend":147}],149:[function(require,module,exports){
 module.exports = hasKeys
 
 function hasKeys(source) {
@@ -24918,7 +27192,7 @@ function hasKeys(source) {
         typeof source === "function")
 }
 
-},{}],116:[function(require,module,exports){
+},{}],150:[function(require,module,exports){
 var Keys = require("object-keys")
 var hasKeys = require("./has-keys")
 
@@ -24945,7 +27219,7 @@ function extend() {
     return target
 }
 
-},{"./has-keys":115,"object-keys":118}],117:[function(require,module,exports){
+},{"./has-keys":149,"object-keys":152}],151:[function(require,module,exports){
 var hasOwn = Object.prototype.hasOwnProperty;
 var toString = Object.prototype.toString;
 
@@ -24987,11 +27261,11 @@ module.exports = function forEach(obj, fn) {
 };
 
 
-},{}],118:[function(require,module,exports){
+},{}],152:[function(require,module,exports){
 module.exports = Object.keys || require('./shim');
 
 
-},{"./shim":120}],119:[function(require,module,exports){
+},{"./shim":154}],153:[function(require,module,exports){
 var toString = Object.prototype.toString;
 
 module.exports = function isArguments(value) {
@@ -25009,7 +27283,7 @@ module.exports = function isArguments(value) {
 };
 
 
-},{}],120:[function(require,module,exports){
+},{}],154:[function(require,module,exports){
 (function () {
 	"use strict";
 
@@ -25073,7 +27347,7 @@ module.exports = function isArguments(value) {
 }());
 
 
-},{"./foreach":117,"./isArguments":119}],121:[function(require,module,exports){
+},{"./foreach":151,"./isArguments":153}],155:[function(require,module,exports){
 var Transform = require('readable-stream/transform')
   , inherits  = require('util').inherits
   , xtend     = require('xtend')
@@ -25153,7 +27427,9 @@ module.exports.obj = through2(function (options, transform, flush) {
   return t2
 })
 
-},{"readable-stream/transform":135,"util":190,"xtend":116}],122:[function(require,module,exports){
+},{"readable-stream/transform":170,"util":225,"xtend":150}],156:[function(require,module,exports){
+arguments[4][147][0].apply(exports,arguments)
+},{"dup":147}],157:[function(require,module,exports){
 (function (process){
 var pathPlatform = require('path-platform');
 
@@ -25205,7 +27481,7 @@ module.exports = function (cwd, opts) {
 }
 
 }).call(this,require('_process'))
-},{"_process":125,"path-platform":123}],123:[function(require,module,exports){
+},{"_process":160,"path-platform":158}],158:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -25852,7 +28128,7 @@ module.exports.posix = posix;
 module.exports.win32 = win32;
 
 }).call(this,require('_process'))
-},{"_process":125,"path":124,"util":190}],124:[function(require,module,exports){
+},{"_process":160,"path":159,"util":225}],159:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -26080,7 +28356,7 @@ var substr = 'ab'.substr(-1) === 'b'
 ;
 
 }).call(this,require('_process'))
-},{"_process":125}],125:[function(require,module,exports){
+},{"_process":160}],160:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};
@@ -26139,14 +28415,14 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],126:[function(require,module,exports){
+},{}],161:[function(require,module,exports){
 module.exports = require("./lib/_stream_duplex.js")
 
-},{"./lib/_stream_duplex.js":127}],127:[function(require,module,exports){
-arguments[4][39][0].apply(exports,arguments)
-},{"./_stream_readable":129,"./_stream_writable":131,"_process":125,"core-util-is":132,"dup":39,"inherits":59}],128:[function(require,module,exports){
-arguments[4][40][0].apply(exports,arguments)
-},{"./_stream_transform":130,"core-util-is":132,"dup":40,"inherits":59}],129:[function(require,module,exports){
+},{"./lib/_stream_duplex.js":162}],162:[function(require,module,exports){
+arguments[4][52][0].apply(exports,arguments)
+},{"./_stream_readable":164,"./_stream_writable":166,"_process":160,"core-util-is":167,"dup":52,"inherits":72}],163:[function(require,module,exports){
+arguments[4][53][0].apply(exports,arguments)
+},{"./_stream_transform":165,"core-util-is":167,"dup":53,"inherits":72}],164:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -27132,7 +29408,7 @@ function indexOf (xs, x) {
 }
 
 }).call(this,require('_process'))
-},{"_process":125,"buffer":34,"core-util-is":132,"events":58,"inherits":59,"isarray":80,"stream":157,"string_decoder/":158}],130:[function(require,module,exports){
+},{"_process":160,"buffer":47,"core-util-is":167,"events":71,"inherits":72,"isarray":106,"stream":192,"string_decoder/":193}],165:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -27344,7 +29620,7 @@ function done(stream, er) {
   return stream.push(null);
 }
 
-},{"./_stream_duplex":127,"core-util-is":132,"inherits":59}],131:[function(require,module,exports){
+},{"./_stream_duplex":162,"core-util-is":167,"inherits":72}],166:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -27734,12 +30010,12 @@ function endWritable(stream, state, cb) {
 }
 
 }).call(this,require('_process'))
-},{"./_stream_duplex":127,"_process":125,"buffer":34,"core-util-is":132,"inherits":59,"stream":157}],132:[function(require,module,exports){
-arguments[4][44][0].apply(exports,arguments)
-},{"buffer":34,"dup":44}],133:[function(require,module,exports){
+},{"./_stream_duplex":162,"_process":160,"buffer":47,"core-util-is":167,"inherits":72,"stream":192}],167:[function(require,module,exports){
+arguments[4][57][0].apply(exports,arguments)
+},{"buffer":47,"dup":57}],168:[function(require,module,exports){
 module.exports = require("./lib/_stream_passthrough.js")
 
-},{"./lib/_stream_passthrough.js":128}],134:[function(require,module,exports){
+},{"./lib/_stream_passthrough.js":163}],169:[function(require,module,exports){
 var Stream = require('stream'); // hack to fix a circular dependency issue when used with browserify
 exports = module.exports = require('./lib/_stream_readable.js');
 exports.Stream = Stream;
@@ -27749,27 +30025,162 @@ exports.Duplex = require('./lib/_stream_duplex.js');
 exports.Transform = require('./lib/_stream_transform.js');
 exports.PassThrough = require('./lib/_stream_passthrough.js');
 
-},{"./lib/_stream_duplex.js":127,"./lib/_stream_passthrough.js":128,"./lib/_stream_readable.js":129,"./lib/_stream_transform.js":130,"./lib/_stream_writable.js":131,"stream":157}],135:[function(require,module,exports){
+},{"./lib/_stream_duplex.js":162,"./lib/_stream_passthrough.js":163,"./lib/_stream_readable.js":164,"./lib/_stream_transform.js":165,"./lib/_stream_writable.js":166,"stream":192}],170:[function(require,module,exports){
 module.exports = require("./lib/_stream_transform.js")
 
-},{"./lib/_stream_transform.js":130}],136:[function(require,module,exports){
+},{"./lib/_stream_transform.js":165}],171:[function(require,module,exports){
 module.exports = require("./lib/_stream_writable.js")
 
-},{"./lib/_stream_writable.js":131}],137:[function(require,module,exports){
-arguments[4][27][0].apply(exports,arguments)
-},{"./lib/async":138,"./lib/core":141,"./lib/sync":143,"dup":27}],138:[function(require,module,exports){
-arguments[4][28][0].apply(exports,arguments)
-},{"./caller.js":139,"./core":141,"./node-modules-paths.js":142,"_process":125,"dup":28,"fs":3,"path":124}],139:[function(require,module,exports){
-arguments[4][29][0].apply(exports,arguments)
-},{"dup":29}],140:[function(require,module,exports){
-arguments[4][30][0].apply(exports,arguments)
-},{"dup":30}],141:[function(require,module,exports){
-arguments[4][31][0].apply(exports,arguments)
-},{"./core.json":140,"dup":31}],142:[function(require,module,exports){
-arguments[4][32][0].apply(exports,arguments)
-},{"_process":125,"dup":32,"path":124}],143:[function(require,module,exports){
-arguments[4][33][0].apply(exports,arguments)
-},{"./caller.js":139,"./core":141,"./node-modules-paths.js":142,"dup":33,"fs":3,"path":124}],144:[function(require,module,exports){
+},{"./lib/_stream_writable.js":166}],172:[function(require,module,exports){
+arguments[4][40][0].apply(exports,arguments)
+},{"./lib/async":173,"./lib/core":176,"./lib/sync":178,"dup":40}],173:[function(require,module,exports){
+(function (process){
+var core = require('./core');
+var fs = require('fs');
+var path = require('path');
+var caller = require('./caller.js');
+var nodeModulesPaths = require('./node-modules-paths.js');
+
+module.exports = function resolve (x, opts, cb) {
+    if (typeof opts === 'function') {
+        cb = opts;
+        opts = {};
+    }
+    if (!opts) opts = {};
+    if (typeof x !== 'string') {
+        return process.nextTick(function () {
+            cb(new Error('path must be a string'));
+        });
+    }
+    
+    var isFile = opts.isFile || function (file, cb) {
+        fs.stat(file, function (err, stat) {
+            if (err && err.code === 'ENOENT') cb(null, false)
+            else if (err) cb(err)
+            else cb(null, stat.isFile() || stat.isFIFO())
+        });
+    };
+    var readFile = opts.readFile || fs.readFile;
+    
+    var extensions = opts.extensions || [ '.js' ];
+    var y = opts.basedir || path.dirname(caller());
+    
+    opts.paths = opts.paths || [];
+    
+    if (/^(?:\.\.?(?:\/|$)|\/|([A-Za-z]:)?[\\\/])/.test(x)) {
+        var res = path.resolve(y, x);
+        if (x === '..') res += '/';
+        loadAsFile(res, function (err, m, pkg) {
+            if (err) cb(err)
+            else if (m) cb(null, m, pkg)
+            else loadAsDirectory(path.resolve(y, x), function (err, d, pkg) {
+                if (err) cb(err)
+                else if (d) cb(null, d, pkg)
+                else cb(new Error("Cannot find module '" + x + "' from '" + y + "'"))
+            })
+        });
+    }
+    else loadNodeModules(x, y, function (err, n, pkg) {
+        if (err) cb(err)
+        else if (n) cb(null, n, pkg)
+        else if (core[x]) return cb(null, x);
+        else cb(new Error("Cannot find module '" + x + "' from '" + y + "'"))
+    });
+    
+    function loadAsFile (x, pkg, cb) {
+        if (typeof pkg === 'function') {
+            cb = pkg;
+            pkg = opts.package;
+        }
+      
+        (function load (exts) {
+            if (exts.length === 0) return cb(null, undefined, pkg);
+            var file = x + exts[0];
+            
+            isFile(file, function (err, ex) {
+                if (err) cb(err)
+                else if (ex) cb(null, file, pkg)
+                else load(exts.slice(1))
+            });
+        })([''].concat(extensions));
+    }
+    
+    function loadAsDirectory (x, fpkg, cb) {
+        if (typeof fpkg === 'function') {
+            cb = fpkg;
+            fpkg = opts.package;
+        }
+        
+        var pkgfile = path.join(x, '/package.json');
+        isFile(pkgfile, function (err, ex) {
+            if (err) return cb(err);
+            if (!ex) return loadAsFile(path.join(x, '/index'), fpkg, cb);
+            
+            readFile(pkgfile, function (err, body) {
+                if (err) return cb(err);
+                try {
+                    var pkg = JSON.parse(body);
+                }
+                catch (err) {}
+                
+                if (opts.packageFilter) {
+                    pkg = opts.packageFilter(pkg, x);
+                }
+                
+                if (pkg.main) {
+                    if (pkg.main === '.' || pkg.main === './'){
+                        pkg.main = 'index'
+                    }
+                    loadAsFile(path.resolve(x, pkg.main), pkg, function (err, m, pkg) {
+                        if (err) return cb(err);
+                        if (m) return cb(null, m, pkg);
+                        if (!pkg) return loadAsFile(path.join(x, '/index'), pkg, cb);
+
+                        var dir = path.resolve(x, pkg.main);
+                        loadAsDirectory(dir, pkg, function (err, n, pkg) {
+                            if (err) return cb(err);
+                            if (n) return cb(null, n, pkg);
+                            loadAsFile(path.join(x, '/index'), pkg, cb);
+                        });
+                    });
+                    return;
+                }
+                
+                loadAsFile(path.join(x, '/index'), pkg, cb);
+            });
+        });
+    }
+    
+    function loadNodeModules (x, start, cb) {
+        (function process (dirs) {
+            if (dirs.length === 0) return cb(null, undefined);
+            var dir = dirs[0];
+            
+            loadAsFile(path.join(dir, '/', x), undefined, function (err, m, pkg) {
+                if (err) return cb(err);
+                if (m) return cb(null, m, pkg);
+                loadAsDirectory(path.join(dir, '/', x), undefined, function (err, n, pkg) {
+                    if (err) return cb(err);
+                    if (n) return cb(null, n, pkg);
+                    process(dirs.slice(1));
+                });
+            });
+        })(nodeModulesPaths(start, opts));
+    }
+};
+
+}).call(this,require('_process'))
+},{"./caller.js":174,"./core":176,"./node-modules-paths.js":177,"_process":160,"fs":3,"path":159}],174:[function(require,module,exports){
+arguments[4][42][0].apply(exports,arguments)
+},{"dup":42}],175:[function(require,module,exports){
+arguments[4][43][0].apply(exports,arguments)
+},{"dup":43}],176:[function(require,module,exports){
+arguments[4][44][0].apply(exports,arguments)
+},{"./core.json":175,"dup":44}],177:[function(require,module,exports){
+arguments[4][45][0].apply(exports,arguments)
+},{"_process":160,"dup":45,"path":159}],178:[function(require,module,exports){
+arguments[4][46][0].apply(exports,arguments)
+},{"./caller.js":174,"./core":176,"./node-modules-paths.js":177,"dup":46,"fs":3,"path":159}],179:[function(require,module,exports){
 module.exports = function (obj) {
     if (!obj || typeof obj !== 'object') return obj;
     
@@ -27806,7 +30217,7 @@ var isArray = Array.isArray || function (xs) {
     return {}.toString.call(xs) === '[object Array]';
 };
 
-},{}],145:[function(require,module,exports){
+},{}],180:[function(require,module,exports){
 
 var createHash = require('sha.js')
 var Buffer = require('buffer').Buffer
@@ -27821,7 +30232,7 @@ module.exports = function hash (str, alg, format) {
 }
 
 
-},{"buffer":34,"json-stable-stringify":146,"sha.js":151}],146:[function(require,module,exports){
+},{"buffer":47,"json-stable-stringify":181,"sha.js":186}],181:[function(require,module,exports){
 var json = typeof JSON !== 'undefined' ? JSON : require('jsonify');
 
 module.exports = function (obj, opts) {
@@ -27873,11 +30284,11 @@ var objectKeys = Object.keys || function (obj) {
     return keys;
 };
 
-},{"jsonify":147}],147:[function(require,module,exports){
+},{"jsonify":182}],182:[function(require,module,exports){
 exports.parse = require('./lib/parse');
 exports.stringify = require('./lib/stringify');
 
-},{"./lib/parse":148,"./lib/stringify":149}],148:[function(require,module,exports){
+},{"./lib/parse":183,"./lib/stringify":184}],183:[function(require,module,exports){
 var at, // The index of the current character
     ch, // The current character
     escapee = {
@@ -28152,7 +30563,7 @@ module.exports = function (source, reviver) {
     }({'': result}, '')) : result;
 };
 
-},{}],149:[function(require,module,exports){
+},{}],184:[function(require,module,exports){
 var cx = /[\u0000\u00ad\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f\ufeff\ufff0-\uffff]/g,
     escapable = /[\\\"\x00-\x1f\x7f-\x9f\u00ad\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f\ufeff\ufff0-\uffff]/g,
     gap,
@@ -28308,7 +30719,7 @@ module.exports = function (value, replacer, space) {
     return str('', {'': value});
 };
 
-},{}],150:[function(require,module,exports){
+},{}],185:[function(require,module,exports){
 (function (Buffer){
 //prototype class for hash functions
 function Hash (blockSize, finalSize) {
@@ -28381,7 +30792,7 @@ Hash.prototype._update = function () {
 module.exports = Hash
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":34}],151:[function(require,module,exports){
+},{"buffer":47}],186:[function(require,module,exports){
 var exports = module.exports = function (alg) {
   var Alg = exports[alg.toLowerCase()]
   if(!Alg) throw new Error(alg + ' is not supported (we accept pull requests)')
@@ -28395,7 +30806,7 @@ exports.sha256 = require('./sha256')
 exports.sha384 = require('./sha384')
 exports.sha512 = require('./sha512')
 
-},{"./sha1":152,"./sha224":153,"./sha256":154,"./sha384":155,"./sha512":156}],152:[function(require,module,exports){
+},{"./sha1":187,"./sha224":188,"./sha256":189,"./sha384":190,"./sha512":191}],187:[function(require,module,exports){
 (function (Buffer){
 /*
  * A JavaScript implementation of the Secure Hash Algorithm, SHA-1, as defined
@@ -28495,7 +30906,7 @@ module.exports = Sha1
 
 
 }).call(this,require("buffer").Buffer)
-},{"./hash":150,"buffer":34,"inherits":59}],153:[function(require,module,exports){
+},{"./hash":185,"buffer":47,"inherits":72}],188:[function(require,module,exports){
 (function (Buffer){
 /**
  * A JavaScript implementation of the Secure Hash Algorithm, SHA-256, as defined
@@ -28551,7 +30962,7 @@ Sha224.prototype._hash = function () {
 module.exports = Sha224
 
 }).call(this,require("buffer").Buffer)
-},{"./hash":150,"./sha256":154,"buffer":34,"inherits":59}],154:[function(require,module,exports){
+},{"./hash":185,"./sha256":189,"buffer":47,"inherits":72}],189:[function(require,module,exports){
 (function (Buffer){
 /**
  * A JavaScript implementation of the Secure Hash Algorithm, SHA-256, as defined
@@ -28704,7 +31115,7 @@ Sha256.prototype._hash = function () {
 module.exports = Sha256
 
 }).call(this,require("buffer").Buffer)
-},{"./hash":150,"buffer":34,"inherits":59}],155:[function(require,module,exports){
+},{"./hash":185,"buffer":47,"inherits":72}],190:[function(require,module,exports){
 (function (Buffer){
 var inherits = require('inherits')
 var SHA512 = require('./sha512');
@@ -28764,7 +31175,7 @@ Sha384.prototype._hash = function () {
 module.exports = Sha384
 
 }).call(this,require("buffer").Buffer)
-},{"./hash":150,"./sha512":156,"buffer":34,"inherits":59}],156:[function(require,module,exports){
+},{"./hash":185,"./sha512":191,"buffer":47,"inherits":72}],191:[function(require,module,exports){
 (function (Buffer){
 var inherits = require('inherits')
 var Hash = require('./hash')
@@ -29013,7 +31424,7 @@ Sha512.prototype._hash = function () {
 module.exports = Sha512
 
 }).call(this,require("buffer").Buffer)
-},{"./hash":150,"buffer":34,"inherits":59}],157:[function(require,module,exports){
+},{"./hash":185,"buffer":47,"inherits":72}],192:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -29142,7 +31553,7 @@ Stream.prototype.pipe = function(dest, options) {
   return dest;
 };
 
-},{"events":58,"inherits":59,"readable-stream/duplex.js":126,"readable-stream/passthrough.js":133,"readable-stream/readable.js":134,"readable-stream/transform.js":135,"readable-stream/writable.js":136}],158:[function(require,module,exports){
+},{"events":71,"inherits":72,"readable-stream/duplex.js":161,"readable-stream/passthrough.js":168,"readable-stream/readable.js":169,"readable-stream/transform.js":170,"readable-stream/writable.js":171}],193:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -29365,7 +31776,7 @@ function base64DetectIncompleteChar(buffer) {
   this.charLength = this.charReceived ? 3 : 0;
 }
 
-},{"buffer":34}],159:[function(require,module,exports){
+},{"buffer":47}],194:[function(require,module,exports){
 var aparse = require('acorn').parse;
 function parse (src) { return aparse(src, { ecmaVersion: 6 }) }
 
@@ -29421,40 +31832,23 @@ ParseError.prototype.inspect = function () {
     return this.annotated;
 };
 
-},{"acorn":160}],160:[function(require,module,exports){
-arguments[4][94][0].apply(exports,arguments)
-},{"dup":94}],161:[function(require,module,exports){
-arguments[4][39][0].apply(exports,arguments)
-},{"./_stream_readable":162,"./_stream_writable":164,"_process":125,"core-util-is":165,"dup":39,"inherits":59}],162:[function(require,module,exports){
-arguments[4][41][0].apply(exports,arguments)
-},{"./_stream_duplex":161,"_process":125,"buffer":34,"core-util-is":165,"dup":41,"events":58,"inherits":59,"isarray":80,"stream":157,"string_decoder/":158,"util":25}],163:[function(require,module,exports){
-arguments[4][42][0].apply(exports,arguments)
-},{"./_stream_duplex":161,"core-util-is":165,"dup":42,"inherits":59}],164:[function(require,module,exports){
-arguments[4][43][0].apply(exports,arguments)
-},{"./_stream_duplex":161,"_process":125,"buffer":34,"core-util-is":165,"dup":43,"inherits":59,"stream":157}],165:[function(require,module,exports){
-arguments[4][44][0].apply(exports,arguments)
-},{"buffer":34,"dup":44}],166:[function(require,module,exports){
-arguments[4][135][0].apply(exports,arguments)
-},{"./lib/_stream_transform.js":163,"dup":135}],167:[function(require,module,exports){
-module.exports = extend
-
-function extend() {
-    var target = {}
-
-    for (var i = 0; i < arguments.length; i++) {
-        var source = arguments[i]
-
-        for (var key in source) {
-            if (source.hasOwnProperty(key)) {
-                target[key] = source[key]
-            }
-        }
-    }
-
-    return target
-}
-
-},{}],168:[function(require,module,exports){
+},{"acorn":195}],195:[function(require,module,exports){
+arguments[4][120][0].apply(exports,arguments)
+},{"dup":120}],196:[function(require,module,exports){
+arguments[4][52][0].apply(exports,arguments)
+},{"./_stream_readable":197,"./_stream_writable":199,"_process":160,"core-util-is":200,"dup":52,"inherits":72}],197:[function(require,module,exports){
+arguments[4][54][0].apply(exports,arguments)
+},{"./_stream_duplex":196,"_process":160,"buffer":47,"core-util-is":200,"dup":54,"events":71,"inherits":72,"isarray":106,"stream":192,"string_decoder/":193,"util":38}],198:[function(require,module,exports){
+arguments[4][55][0].apply(exports,arguments)
+},{"./_stream_duplex":196,"core-util-is":200,"dup":55,"inherits":72}],199:[function(require,module,exports){
+arguments[4][56][0].apply(exports,arguments)
+},{"./_stream_duplex":196,"_process":160,"buffer":47,"core-util-is":200,"dup":56,"inherits":72,"stream":192}],200:[function(require,module,exports){
+arguments[4][57][0].apply(exports,arguments)
+},{"buffer":47,"dup":57}],201:[function(require,module,exports){
+arguments[4][170][0].apply(exports,arguments)
+},{"./lib/_stream_transform.js":198,"dup":170}],202:[function(require,module,exports){
+arguments[4][147][0].apply(exports,arguments)
+},{"dup":147}],203:[function(require,module,exports){
 (function (process){
 var Transform = require('readable-stream/transform')
   , inherits  = require('util').inherits
@@ -29554,7 +31948,7 @@ module.exports.obj = through2(function (options, transform, flush) {
 })
 
 }).call(this,require('_process'))
-},{"_process":125,"readable-stream/transform":166,"util":190,"xtend":167}],169:[function(require,module,exports){
+},{"_process":160,"readable-stream/transform":201,"util":225,"xtend":202}],204:[function(require,module,exports){
 'use strict';
 
 var through = require('through');
@@ -29642,7 +32036,7 @@ function compileNamespaceStep(code, name, i, names) {
   return code
 }
 
-},{"rfile":170,"through":177,"uglify-js":188}],170:[function(require,module,exports){
+},{"rfile":205,"through":212,"uglify-js":223}],205:[function(require,module,exports){
 (function (__filename){
 var callsite = require('callsite');
 var resolve = require('resolve');
@@ -29684,7 +32078,7 @@ function stripBOM(str){
     : str;
 }
 }).call(this,"/node_modules\\browserify\\node_modules\\umd\\node_modules\\rfile\\index.js")
-},{"callsite":171,"fs":3,"path":124,"resolve":172}],171:[function(require,module,exports){
+},{"callsite":206,"fs":3,"path":159,"resolve":207}],206:[function(require,module,exports){
 
 module.exports = function(){
   var orig = Error.prepareStackTrace;
@@ -29696,9 +32090,9 @@ module.exports = function(){
   return stack;
 };
 
-},{}],172:[function(require,module,exports){
-arguments[4][27][0].apply(exports,arguments)
-},{"./lib/async":173,"./lib/core":175,"./lib/sync":176,"dup":27}],173:[function(require,module,exports){
+},{}],207:[function(require,module,exports){
+arguments[4][40][0].apply(exports,arguments)
+},{"./lib/async":208,"./lib/core":210,"./lib/sync":211,"dup":40}],208:[function(require,module,exports){
 (function (process){
 var core = require('./core');
 var fs = require('fs');
@@ -29833,11 +32227,11 @@ module.exports = function resolve (x, opts, cb) {
 };
 
 }).call(this,require('_process'))
-},{"./core":175,"_process":125,"fs":3,"path":124}],174:[function(require,module,exports){
-arguments[4][30][0].apply(exports,arguments)
-},{"dup":30}],175:[function(require,module,exports){
-arguments[4][31][0].apply(exports,arguments)
-},{"./core.json":174,"dup":31}],176:[function(require,module,exports){
+},{"./core":210,"_process":160,"fs":3,"path":159}],209:[function(require,module,exports){
+arguments[4][43][0].apply(exports,arguments)
+},{"dup":43}],210:[function(require,module,exports){
+arguments[4][44][0].apply(exports,arguments)
+},{"./core.json":209,"dup":44}],211:[function(require,module,exports){
 (function (process){
 var core = require('./core');
 var fs = require('fs');
@@ -29940,13 +32334,13 @@ module.exports = function (x, opts) {
 };
 
 }).call(this,require('_process'))
-},{"./core":175,"_process":125,"fs":3,"path":124}],177:[function(require,module,exports){
+},{"./core":210,"_process":160,"fs":3,"path":159}],212:[function(require,module,exports){
 arguments[4][7][0].apply(exports,arguments)
-},{"_process":125,"dup":7,"stream":157}],178:[function(require,module,exports){
+},{"_process":160,"dup":7,"stream":192}],213:[function(require,module,exports){
 arguments[4][13][0].apply(exports,arguments)
-},{"./source-map/source-map-consumer":183,"./source-map/source-map-generator":184,"./source-map/source-node":185,"dup":13}],179:[function(require,module,exports){
+},{"./source-map/source-map-consumer":218,"./source-map/source-map-generator":219,"./source-map/source-node":220,"dup":13}],214:[function(require,module,exports){
 arguments[4][14][0].apply(exports,arguments)
-},{"./util":186,"amdefine":187,"dup":14}],180:[function(require,module,exports){
+},{"./util":221,"amdefine":222,"dup":14}],215:[function(require,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -30092,9 +32486,9 @@ define(function (require, exports, module) {
 
 });
 
-},{"./base64":181,"amdefine":187}],181:[function(require,module,exports){
+},{"./base64":216,"amdefine":222}],216:[function(require,module,exports){
 arguments[4][16][0].apply(exports,arguments)
-},{"amdefine":187,"dup":16}],182:[function(require,module,exports){
+},{"amdefine":222,"dup":16}],217:[function(require,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -30177,7 +32571,7 @@ define(function (require, exports, module) {
 
 });
 
-},{"amdefine":187}],183:[function(require,module,exports){
+},{"amdefine":222}],218:[function(require,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -30657,7 +33051,7 @@ define(function (require, exports, module) {
 
 });
 
-},{"./array-set":179,"./base64-vlq":180,"./binary-search":182,"./util":186,"amdefine":187}],184:[function(require,module,exports){
+},{"./array-set":214,"./base64-vlq":215,"./binary-search":217,"./util":221,"amdefine":222}],219:[function(require,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -31059,7 +33453,7 @@ define(function (require, exports, module) {
 
 });
 
-},{"./array-set":179,"./base64-vlq":180,"./util":186,"amdefine":187}],185:[function(require,module,exports){
+},{"./array-set":214,"./base64-vlq":215,"./util":221,"amdefine":222}],220:[function(require,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -31461,7 +33855,7 @@ define(function (require, exports, module) {
 
 });
 
-},{"./source-map-generator":184,"./util":186,"amdefine":187}],186:[function(require,module,exports){
+},{"./source-map-generator":219,"./util":221,"amdefine":222}],221:[function(require,module,exports){
 /* -*- Mode: js; js-indent-level: 2; -*- */
 /*
  * Copyright 2011 Mozilla Foundation and contributors
@@ -31765,7 +34159,7 @@ define(function (require, exports, module) {
 
 });
 
-},{"amdefine":187}],187:[function(require,module,exports){
+},{"amdefine":222}],222:[function(require,module,exports){
 (function (process,__filename){
 /** vim: et:ts=4:sw=4:sts=4
  * @license amdefine 0.1.0 Copyright (c) 2011, The Dojo Foundation All Rights Reserved.
@@ -32068,7 +34462,7 @@ function amdefine(module, requireFn) {
 module.exports = amdefine;
 
 }).call(this,require('_process'),"/node_modules\\browserify\\node_modules\\umd\\node_modules\\uglify-js\\node_modules\\source-map\\node_modules\\amdefine\\amdefine.js")
-},{"_process":125,"path":124}],188:[function(require,module,exports){
+},{"_process":160,"path":159}],223:[function(require,module,exports){
 var sys = require("util");
 var MOZ_SourceMap = require("source-map");
 var UglifyJS = exports;
@@ -40198,14 +42592,14 @@ exports.describe_ast = function () {
     doitem(UglifyJS.AST_Node);
     return out + "";
 };
-},{"source-map":178,"util":190}],189:[function(require,module,exports){
+},{"source-map":213,"util":225}],224:[function(require,module,exports){
 module.exports = function isBuffer(arg) {
   return arg && typeof arg === 'object'
     && typeof arg.copy === 'function'
     && typeof arg.fill === 'function'
     && typeof arg.readUInt8 === 'function';
 }
-},{}],190:[function(require,module,exports){
+},{}],225:[function(require,module,exports){
 (function (process,global){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -40795,6 +43189,6 @@ function hasOwnProperty(obj, prop) {
 }
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./support/isBuffer":189,"_process":125,"inherits":59}],191:[function(require,module,exports){
-arguments[4][167][0].apply(exports,arguments)
-},{"dup":167}]},{},[1]);
+},{"./support/isBuffer":224,"_process":160,"inherits":72}],226:[function(require,module,exports){
+arguments[4][147][0].apply(exports,arguments)
+},{"dup":147}]},{},[1]);

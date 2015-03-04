@@ -1,15 +1,15 @@
 {
   "name": "build-module",
   "version": "1.0.0",
-  "description": "script to build a browserify module",
+  "description": "simple way to build a browserify module with transforms",
   "main": "build-module.js",
   "repository": {
+		"build": "node build.js",
     "type": "git",
     "url": "https://github.com:bnwan/buildModule.git"
   }, 
   "scripts": {
-    "build": "node build.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "node build.js"    
   },
   "author": "Benjamin Nwaneampeh",
   "license": "ISC",
