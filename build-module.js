@@ -1,25 +1,23 @@
 'use strict';
 
-var b = require('browserify')();
+var browserify = require('browserify');
 var fs = require('fs');
 
 var api = {
 	bundle: function (options) {
 		if (!options) {
 			options = {};
-		}
-
-		b.add(options.root);
+		}			
+	
+		var b = browserify(options.root);
 
 		if (Array.isArray(options.transforms)) {
-			options.transforms.forEach(function (transform) {
-				b.transform(transform);
+			options.transforms.forEach(function (t) {				
+				b.transform(t);
 			});
 		}
-
-		b.bundle(function (err, code) {
-			fs.writeFileSync(options.name + '.bundle.js', code);
-		});
+		
+		b.bundle().pipe(fs.createWriteStream(options.output));
 	}
 };
 
