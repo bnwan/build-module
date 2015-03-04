@@ -12,7 +12,7 @@ var api = {
 		b.add(options.root);
 
 		if (Array.isArray(options.transforms)) {
-			options.transforms.each(function (transform) {
+			options.transforms.forEach(function (transform) {
 				b.transform(transform);
 			});
 		}
