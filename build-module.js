@@ -9,7 +9,7 @@ var api = {
 			options = {};
 		}			
 	
-		var b = browserify(options.root);
+		var b = browserify(options.root, options.bundleOptions);
 
 		if (Array.isArray(options.transforms)) {
 			options.transforms.forEach(function (t) {				
