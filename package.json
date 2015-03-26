@@ -1,6 +1,6 @@
 {
   "name": "build-module",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "simple way to build a browserify module with transforms",
   "main": "build-module.js",
   "repository": {

@@ -13,7 +13,9 @@ var api = {
 
 		if (Array.isArray(options.transforms)) {
 			options.transforms.forEach(function (t) {				
-				b.transform(t);
+				b.transform({
+          global: true
+        }, t);
 			});
 		}
 		
