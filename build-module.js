@@ -15,9 +15,9 @@ var api = {
       options.transforms.forEach(function (t) {
         b.transform({
           sourcemap: options.bundleOptions.debug,
-          compress: options.bundleOptions.debug,
-          mangle: options.bundleOptions.debug,
-          global: options.bundleOptions.debug
+          compress: true,
+          mangle: true,
+          global: true
         }, t);
       });
     }
